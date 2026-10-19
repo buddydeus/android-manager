@@ -23,7 +23,7 @@ adb -s SERIAL shell am start -W -n com.buddydeus.androidmanager/.ui.MainActivity
 adb -s SERIAL shell dpm set-device-owner com.buddydeus.androidmanager/.platform.ManagerAdminReceiver
 ```
 
-此命令须在管理组件实现后使用。普通设备管理员不足以管控；注册要求以系统返回为准。不要自动删除账户、清除数据或恢复出厂设置。完整设备管理可能需要设备重置，操作前备份并由管理员确认。
+管理组件已实现。测试机当前被已有账户阻挡注册，须由管理员移除账户后重试。普通设备管理员不足以管控；注册要求以系统返回为准。不要自动删除账户、清除数据或恢复出厂设置。完整设备管理可能需要设备重置，操作前备份并由管理员确认。
 
 ## 当前进度
 
