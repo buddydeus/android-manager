@@ -6,7 +6,7 @@ object PolicyPlanner {
         val enabled=state.initialized && state.enabled
         return PolicyPlan(enabled,(state.blacklist+state.records.keys).associateWith { p ->
             val app=apps[p]
-            enabled && active && p in state.blacklist && app?.installed==true && app.protection.isEmpty()
+            enabled && active && p in state.blacklist && app?.installed==true && !app.updating && app.protection.isEmpty()
         })
     }
 }

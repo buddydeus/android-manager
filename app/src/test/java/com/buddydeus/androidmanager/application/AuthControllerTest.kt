@@ -7,10 +7,11 @@ import org.junit.Test
 class AuthControllerTest {
     private class Meta : AuthMetadataStore { var value=AuthMetadata();override fun read()=value;override fun write(value:AuthMetadata){this.value=value} }
     private class Passwords : PasswordAccess {
-        var content:String?=null
+        var content:String?=null;var pendingDirectory=false
         override fun inspect()=content?.let { PasswordFileState.Ready(it,PasswordCodec.fingerprint(it)) } ?: PasswordFileState.Missing
-        override fun writePin(pin:CharArray):String { content=PasswordCodec.create(pin);return PasswordCodec.fingerprint(content!!) }
+        override fun writePin(pin:CharArray):String { content=PasswordCodec.create(pin);pendingDirectory=false;return PasswordCodec.fingerprint(content!!) }
         override fun location()="test"
+        override fun needsDirectoryCommit()=pendingDirectory
     }
     @Test fun defaultLoginCannotGrantManagementUntilPinChanged() {
         val p=Passwords();val auth=AuthController(p,Meta(),AuditSink{}, {0},{0},{1})
@@ -45,6 +46,24 @@ class AuthControllerTest {
         a.login("123456".toCharArray())
         assertTrue(events.any { it.category==LogCategory.PERMISSION_ERROR })
         assertFalse(events.any { it.result.contains("123456") })
+    }
+    @Test fun queuedLoginTokenCannotAuthenticateAfterLeave() {
+        val p=Passwords();val a=AuthController(p,Meta(),AuditSink{}, {0},{0},{1})
+        val submitted=a.generationToken()
+        a.invalidate()
+        assertTrue(a.login("0000".toCharArray(),submitted) is AuthResult.Denied)
+    }
+    @Test fun priorSessionTokenCannotAuthorizeAfterReauthentication() {
+        val p=Passwords();val a=AuthController(p,Meta(),AuditSink{}, {0},{0},{1})
+        a.login("0000".toCharArray());a.setNewPin("123456".toCharArray())
+        val submitted=a.generationToken();a.invalidate();a.login("123456".toCharArray())
+        assertFalse(a.requireSession(submitted))
+    }
+    @Test fun existingPinInNewDirectoryRequiresDurableWriteBeforeSession() {
+        val p=Passwords();p.writePin("123456".toCharArray());p.pendingDirectory=true
+        val a=AuthController(p,Meta(),AuditSink{}, {0},{0},{1})
+        assertEquals(AuthResult.NeedsNewPin,a.login("123456".toCharArray()));assertFalse(a.requireSession())
+        assertEquals(AuthResult.Authenticated,a.setNewPin("654321".toCharArray()));assertFalse(p.pendingDirectory)
     }
     @Test fun leavingDuringPasswordVerificationCannotReauthenticate() {
         val m=Meta();lateinit var a:AuthController

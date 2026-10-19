@@ -1,30 +1,45 @@
 # Android 应用管控
 
-Android 11+ 单机 Device Owner 应用。需求见 [requirement](docs/requirement.md)，实现契约见 [proposal](docs/proposal.md)。
+Android 11+ 单机 Device Owner 应用。需求见 [requirement](docs/requirement.md)，技术契约见 [proposal](docs/proposal.md)，设备验证见 [device-validation](docs/device-validation.md)。
+
+```text
+管理入口 → 密码验证 → 黑名单 / 共用周时间表 / 总开关 / 设置 / 分类日志
+系统事件 → 串行协调 → 保存意图 → 暂停与隐藏或解除 → 保存执行结果
+```
+
+支持系统应用搜索、跨午夜时段、独立密码文件及恢复、登录暂停、上海时区策略、开机恢复和精确边界闹钟。初始化完成前不施加策略；密码存储异常不停止已有后台管控。系统拒绝或归属不明会明确展示，不盲目解除外部限制。
 
 ## 构建与调试
 
-使用 JDK 21、Android SDK 36。设置 `ANDROID_HOME` 为本机 SDK 路径。
+使用 JDK 21、Android SDK 36；设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
 
 ```sh
-./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease
 adb devices -l
 adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s SERIAL shell am start -W -n com.buddydeus.androidmanager/.ui.MainActivity
 ```
 
-测试机为 OPPO PKD130 / Android 15 / API35 / 主用户0。设备连接及能力证据见 [device-validation](docs/device-validation.md)。ADB 37 的 libusb 后端曾断开，本次用 `ADB_LIBUSB=0 adb start-server` 及手机重开 USB 调试后恢复；此为当前会话环境，未修改用户 Shell 配置。
+调试 APK：`app/build/outputs/apk/debug/app-debug.apk`。Release 输出为未签名 APK，`debuggable=false`，正式分发前需使用管理员自己的签名配置。
 
-## 部署
+设备基础测试：`ANDROID_SERIAL=SERIAL ./gradlew :app:connectedDebugAndroidTest`。测试中的实际策略用例只在明确指定 `policyTarget` 的独立模拟器运行；实机不会自动选择应用进行暂停或隐藏。
 
-安装后注册完整设备管理身份：
+## 部署与使用
+
+安装后通过电脑注册完整设备管理身份：
 
 ```sh
 adb -s SERIAL shell dpm set-device-owner com.buddydeus.androidmanager/.platform.ManagerAdminReceiver
 ```
 
-管理组件已实现。测试机当前被已有账户阻挡注册，须由管理员移除账户后重试。普通设备管理员不足以管控；注册要求以系统返回为准。不要自动删除账户、清除数据或恢复出厂设置。完整设备管理可能需要设备重置，操作前备份并由管理员确认。
+普通设备管理员权限不足。注册条件以系统返回为准；已有账户可能阻挡注册，须由管理员处理。不得自动删除账户、清除数据或恢复出厂设置。
 
-## 当前进度
+进入应用后授权本地主存储密码目录，建议 `Documents/AndroidManager`；输入默认密码 `0000` 并设置至少六位数字的新密码。密码文件只保存加盐校验值；删除该文件可恢复默认密码，读取异常则通过恢复入口重新选择目录并设置密码。配置和日志独立保留。
 
-构建及实机启动通过；周时间规则、原子状态快照及分类日志已完成，密码文件、恢复、会话和登录暂停已实现；串行策略协调及崩溃归属处理已实现；28 项单元测试通过。Direct Boot、事件服务和单次边界闹钟已接入；Lint 与构建通过。初始化、登录、应用搜索/黑名单、周表编辑、总开关、改密与日志界面已实现。每环节验证后提交，连接通过不等同于系统管控验收通过。
+总开关关闭后解除本软件施加的限制并保留设置和 Device Owner 身份。关闭不等于退管；系统应用能否限制、桌面和通知效果须在目标 ROM 验证。
+
+## 验证状态
+
+35 项单元测试、Lint、Debug 和 Release 构建通过。OPPO PKD130 / Android 15 的五项基础 instrumentation 通过；实际 Device Owner 用例因未取得管理身份跳过。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化与重启应用登录检查。
+
+OPPO 当前仍有账户，Device Owner 注册被拒绝；系统市场、通知、已打开应用、锁屏开机及 Doze 等实机验收尚未完成。USB 调试连接正常，连接通过不等于管控验收通过。

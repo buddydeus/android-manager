@@ -113,7 +113,7 @@ import java.time.LocalDate
                     Column(Modifier.weight(1f)) {
                         Text(app.name,style=MaterialTheme.typography.titleMedium)
                         Text(app.packageName,style=MaterialTheme.typography.bodySmall)
-                        Text(if(!app.installed) "未安装 · 保留包名规则" else if(app.system) "系统应用" else "已安装")
+                        Text(if(app.updating) "正在更新 · 保留原策略记录" else if(!app.installed) "未安装 · 保留包名规则" else if(app.system) "系统应用" else "已安装")
                         if(app.protection.isNotEmpty()) Text("受保护：${app.protection}",color=MaterialTheme.colorScheme.error)
                         config.records[app.packageName]?.let { r ->
                             Text("暂停：${if(r.ownSuspended) "本软件已施加" else "未施加"}；隐藏：${if(r.ownHidden) "本软件已施加" else "未施加"}",style=MaterialTheme.typography.bodySmall)

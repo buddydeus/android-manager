@@ -11,7 +11,7 @@ class PolicyCoordinatorTest {
         override fun write(state:ManagerState) { if(failIntent && state.records.values.any { it.pending.isNotEmpty() }) error("disk full");this.state=state }
     }
     private class Port:DevicePolicyPort {
-        var suspended=false;var hidden=false;var suspendFails=false;var hideFails=false;var crashAfterSuspend=false
+        var suspended=false;var hidden=false;var suspendFails=false;var hideFails=false;var crashAfterSuspend=false;var crashAfterHide=false
         val calls=mutableListOf<String>()
         override fun isOwner()=true
         override fun inspect(packageName:String)=PackagePolicyState(suspended,hidden)
@@ -21,7 +21,7 @@ class PolicyCoordinatorTest {
             suspended=value;if(crashAfterSuspend) throw IllegalStateException("process stopped")
             return PolicyStepResult(true)
         }
-        override fun setHidden(packageName:String,value:Boolean):PolicyStepResult { calls+="hide:$value";if(hideFails) return PolicyStepResult(false,"rejected");hidden=value;return PolicyStepResult(true) }
+        override fun setHidden(packageName:String,value:Boolean):PolicyStepResult { calls+="hide:$value";if(hideFails) return PolicyStepResult(false,"rejected");hidden=value;if(crashAfterHide) error("process stopped after hide");return PolicyStepResult(true) }
         override fun applyTime(enabled:Boolean,owned:Boolean)=TimePolicyResult(enabled,true,"ok")
     }
     private val catalog=object:CatalogPort { override fun load(known:Map<String,AppEntry>)=mapOf("test.app" to AppEntry("test.app","Test",instance=1));override fun protection(packageName:String)="" }
@@ -32,6 +32,44 @@ class PolicyCoordinatorTest {
         val s=Store(active());val p=Port()
         PolicyCoordinator(s,catalog,p,AuditSink { events+=it },Clock.fixed(Instant.parse("2026-10-19T04:00:00Z"),ZoneOffset.UTC),schedule={"定时执行不可用：权限不足"}).reconcile("test")
         assertTrue(events.any { it.category==LogCategory.PERMISSION_ERROR && it.action=="边界调度" })
+    }
+    @Test fun failedUnhideIsNotErasedBySuccessfulUnsuspend() {
+        val s=Store(active().copy(enabled=false,records=mapOf("test.app" to PolicyRecord(ownSuspended=true,ownHidden=true,instance=1))))
+        val p=Port().apply { suspended=true;hidden=true;hideFails=true }
+        coordinator(s,p).reconcile("disable")
+        assertFalse(p.suspended);assertTrue(p.hidden)
+        val r=s.state.records.getValue("test.app")
+        assertTrue(r.error.isNotEmpty());assertTrue(r.result in setOf("PARTIAL","FAILED"))
+        assertFalse(s.state.lastEvaluation.contains("已关闭并解除"))
+    }
+    @Test fun unknownHideDoesNotPreventReleasingKnownSuspension() {
+        val s=Store(active());val p=Port().apply { crashAfterHide=true }
+        coordinator(s,p).reconcile("apply")
+        assertTrue(p.hidden);assertEquals("HIDE",s.state.records.getValue("test.app").pending)
+        s.state=s.state.copy(enabled=false);p.crashAfterHide=false;p.calls.clear()
+        coordinator(s,p).reconcile("disable")
+        assertFalse(p.suspended);assertTrue(p.hidden)
+        assertEquals(listOf("suspend:false"),p.calls)
+        assertEquals("UNKNOWN",s.state.records.getValue("test.app").result)
+    }
+    @Test fun reinstallationBindsReceiptsToTheNewInstance() {
+        val s=Store(active());val p=Port();var app=AppEntry("test.app","Test",installed=false)
+        val cat=object:CatalogPort { override fun load(known:Map<String,AppEntry>)=mapOf("test.app" to app);override fun protection(packageName:String)="" }
+        val c=PolicyCoordinator(s,cat,p,AuditSink{},Clock.fixed(Instant.parse("2026-10-19T04:00:00Z"),ZoneOffset.UTC))
+        c.reconcile("uninstall");app=app.copy(installed=true,instance=100);c.reconcile("install")
+        assertEquals(100L,s.state.records.getValue("test.app").instance)
+        app=app.copy(instance=200);s.state=s.state.copy(enabled=false);p.calls.clear()
+        c.reconcile("missed reinstall event")
+        assertTrue(p.calls.isEmpty());assertTrue(p.hidden);assertTrue(p.suspended)
+    }
+    @Test fun transientUpdateCannotEraseOwnedReceipts() {
+        val receipt=PolicyRecord(ownSuspended=true,ownHidden=true,instance=100)
+        val s=Store(active().copy(records=mapOf("test.app" to receipt)))
+        val p=Port().apply { suspended=true;hidden=true }
+        val cat=object:CatalogPort { override fun load(known:Map<String,AppEntry>)=mapOf("test.app" to AppEntry("test.app","Test",installed=false,instance=100,updating=true));override fun protection(packageName:String)="" }
+        PolicyCoordinator(s,cat,p,AuditSink{},Clock.fixed(Instant.parse("2026-10-19T04:00:00Z"),ZoneOffset.UTC)).reconcile("update")
+        assertEquals(receipt,s.state.records.getValue("test.app"));assertTrue(p.calls.isEmpty())
+        assertTrue(s.state.lastEvaluation.contains("正在更新"))
     }
     @Test fun suspensionFailureNeverFallsBackToHiding() {
         val s=Store(active());val p=Port().apply { suspendFails=true };coordinator(s,p).reconcile("test")

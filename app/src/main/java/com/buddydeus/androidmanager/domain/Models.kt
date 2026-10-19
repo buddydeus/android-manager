@@ -10,12 +10,13 @@ enum class LogCategory(val label: String) {
     LOGIN_SECURITY("登录安全"), CONFIG_CHANGE("配置变更"), POLICY_EXECUTION("管控执行"), PERMISSION_ERROR("权限异常")
 }
 data class AuditEvent(val category: LogCategory, val action: String, val result: String, val subject: String = "", val revision: Long = 0, val at: Instant = Instant.now())
-data class AppEntry(val packageName: String, val name: String, val system: Boolean = false, val installed: Boolean = true, val instance: Long = 0, val protection: String = "", val knownLauncher: Boolean = true)
+data class AppEntry(val packageName: String, val name: String, val system: Boolean = false, val installed: Boolean = true, val instance: Long = 0, val protection: String = "", val knownLauncher: Boolean = true, val updating: Boolean = false)
 data class PolicyRecord(
     val ownSuspended: Boolean = false, val ownHidden: Boolean = false,
     val pending: String = "", val result: String = "", val error: String = "",
     val operationId: String = "", val revision: Long = 0, val instance: Long = 0,
     val baselineSuspended: Boolean? = null, val baselineHidden: Boolean? = null,
+    val unknownSuspended: Boolean = false, val unknownHidden: Boolean = false,
 )
 data class ManagerState(
     val schemaVersion: Int = 1, val revision: Long = 0, val initialized: Boolean = false,

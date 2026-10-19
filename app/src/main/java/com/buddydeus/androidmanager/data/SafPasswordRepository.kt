@@ -2,10 +2,14 @@ package com.buddydeus.androidmanager.data
 
 import android.content.Context
 import android.content.Intent
+import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
 
-class SafPasswordRepository(private val context: Context,private val metadata: AuthMetadataStore) : PasswordAccess {
+class SafPasswordRepository(
+    private val context: Context,private val metadata: AuthMetadataStore,
+    private val queryDirectory:(Uri,Array<String>)->Cursor? = { uri,columns -> context.contentResolver.query(uri,columns,null,null,null) },
+) : PasswordAccess {
     private val resolver get()=context.contentResolver
     @Volatile private var candidate: String?=null
     fun selectDirectory(uri: Uri) {
@@ -20,7 +24,8 @@ class SafPasswordRepository(private val context: Context,private val metadata: A
     private fun children(uri: Uri): List<Uri> {
         val parent=DocumentsContract.getTreeDocumentId(uri)
         val list=DocumentsContract.buildChildDocumentsUriUsingTree(uri,parent)
-        return resolver.query(list,arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME),null,null,null)?.use { c ->
+        return queryDirectory(list,arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME))?.use { c ->
+            check(!c.extras.containsKey(DocumentsContract.EXTRA_ERROR)) { "目录查询失败" }
             check(!c.extras.getBoolean(DocumentsContract.EXTRA_LOADING,false)) { "目录仍在加载" }
             buildList { while(c.moveToNext()) if(c.getString(1)=="password.json") add(DocumentsContract.buildDocumentUriUsingTree(uri,c.getString(0))) }
         } ?: error("无法查询密码目录")
@@ -48,5 +53,6 @@ class SafPasswordRepository(private val context: Context,private val metadata: A
         candidate?.let { metadata.write(metadata.read().copy(directory=it));candidate=null }
         return PasswordCodec.fingerprint(saved)
     }
+    override fun needsDirectoryCommit(): Boolean = candidate!=null
     override fun location(): String = runCatching { DocumentsContract.getTreeDocumentId(tree())+"/password.json" }.getOrDefault("未选择密码目录")
 }

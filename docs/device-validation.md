@@ -1,18 +1,42 @@
 # 设备验证记录
 
-日期：2026-10-19（上海）。测试机：OPPO PKD130，Android15 / API35，当前用户0，序列号尾号828E0。
+更新日期：2026-10-20（上海）。测试机：OPPO PKD130，Android 15 / API35，ColorOS 15，当前用户0，序列号尾号828E0。
+
+## OPPO 实机
 
 | 检查 | 结果 |
 | --- | --- |
-| USB 枚举 | 通过，OPPO 设备 |
-| ADB 授权 | 通过，状态 device |
-| Shell 往返 | 通过，指定 serial 输出探针文本 |
-| push/pull | 通过，/data/local/tmp 独立临时文件内容一致，已删除 |
-| 现有设备管理身份 | no owners；注册被系统拒绝：设备已有账户，等待管理员移除后重试 |
-| APK 安装与启动 | 通过，安装成功，am start -W 返回 Status: ok，未见 AndroidRuntime 崩溃 |
-| Android instrumentation | 3项通过：DP原子状态损坏处理、真实应用目录与保护、未初始化管理入口隔离 |
-| 未初始化界面 | 已安装完整界面，正确停留在管理身份初始化页 |
-| 系统市场暂停/隐藏 | 未验证，等待Device Owner注册 |
-| 解锁前恢复、Doze、密码恢复 | 未验证 |
+| USB、ADB 授权 | 通过，状态 device；当前可持续执行调试命令 |
+| Shell、push/pull | 通过，独立临时文件往返内容一致，已删除 |
+| Device Owner | 未取得；设备仍有1个账户，注册被系统拒绝，等待管理员自行移除 |
+| 最终 Debug APK 安装与启动 | 通过；启动返回 Status: ok，未发现应用 AndroidRuntime 崩溃 |
+| instrumentation | 5项通过、1项按条件跳过：DP状态损坏处理、真实应用目录与保护、初始化入口隔离、SAF错误查询、SAF确认文件缺失 |
+| 初始管理入口 | 正确停留在 Device Owner 初始化引导；未初始化不施加策略 |
+| 系统市场、通知、已打开应用 | 未验证；依赖 Device Owner 注册和目标 ROM |
+| 锁屏开机、Doze、真实时段边界 | 未验证；依赖完整部署 |
+| 本机密码目录及恢复 | 尚未完成实机验收 |
 
-连接期间 libusb 出现读取错误并断开；使用本次服务临时环境 `ADB_LIBUSB=0`，手机重开 USB 调试并重新连接后恢复。未修改主机持久设置。
+连接期间 libusb 出现读取错误并断开；使用当前服务临时环境 `ADB_LIBUSB=0 adb start-server`，手机重开 USB 调试并重新连接后恢复。未修改主机持久设置，未移除手机账户、清除数据或恢复出厂设置。
+
+## 独立模拟器
+
+新建 `android_manager_validation`（Android 16/API36，Google APIs x86_64，独立空白设备），通过正常 `dpm set-device-owner` 注册。测试不代表 OPPO 管控能力。
+
+- 真实 DPM 集成用例通过：对显式指定的 Google Clock 执行暂停及隐藏，确认隐藏后仍保留应用目录记录；注入测试时钟越过区间后解除；再次限制后保存关闭并执行开机协调，确认解除暂停、隐藏及本软件时间限制。
+- 基础存储与 SAF 查询用例通过；已初始化模拟器跳过未初始化入口用例，该入口已在 OPPO 通过。
+- 使用真实系统目录选择器授权 `Documents/AndroidManager`，默认密码验证、强制新密码设置通过；最终 APK 覆盖安装后目录授权保留，重新验证密码进入管理界面通过。
+- 从管理界面搜索 Clock、加入黑名单、保存当天生效周表后，系统实际显示 `hidden=true / suspended=true`；关闭总开关后变为 `false / false`，时间限制解除，黑名单保留。精确闹钟未授权时界面明确提示能力不足。
+- 以上边界和关闭开机用例调用真实 DPM，使用注入时钟及开机计数；不等同于真实闹钟唤醒、物理重启或解锁前验收。
+
+## 构建与回归
+
+- 35项单元测试通过，覆盖跨日周表、原子存储、日志保留、密码和会话、策略意图及失败归属等。
+- `testDebugUnitTest`、`lintDebug`、`assembleDebug`、`assembleDebugAndroidTest`、`assembleRelease` 通过。
+- Release APK 的 manifest `debuggable=false`；产物未签名，正式分发签名尚未配置。
+- 独立审查发现的会话排队、失败覆盖、重装归属、未知隐藏阻塞暂停解除及 SAF 错误误判均已修复并回归。新目录持久化、损坏日志提示及更新中间状态也已补齐。
+
+```text
+构建 / 单元测试 / 基础实机测试 → 已通过
+独立模拟器实际 DPM 调用       → 已通过
+OPPO 完整管控验收            → 等待管理员处理账户后继续
+```

@@ -10,6 +10,8 @@ import java.time.format.ResolverStyle
 import java.util.UUID
 
 class AuditRepository(private val directory: File) : AuditSink {
+    @Volatile var lastReadWarning:String=""
+        private set
     private val format=DateTimeFormatter.ofPattern("uuuuMMdd").withResolverStyle(ResolverStyle.STRICT)
     @Synchronized override fun append(event: AuditEvent) {
         check(directory.isDirectory || directory.mkdirs())
@@ -24,9 +26,10 @@ class AuditRepository(private val directory: File) : AuditSink {
         }
     }
     @Synchronized fun readPage(date: LocalDate, category: LogCategory?, offset: Int, limit: Int): List<String> {
+        lastReadWarning=""
         require(offset>=0 && limit in 1..200)
         val file=File(directory,"${date.format(format)}.log");if(!file.exists()) return emptyList()
-        return file.bufferedReader().useLines { lines -> lines.mapNotNull { line -> runCatching { JSONObject(line) }.getOrNull() }
+        return file.bufferedReader().useLines { lines -> lines.mapNotNull { line -> runCatching { JSONObject(line) }.onFailure { lastReadWarning="部分日志行损坏，已跳过；其余记录仍可查看" }.getOrNull() }
             .filter { category==null || it.optString("category")==category.name }.drop(offset).take(limit).map { j ->
                 val label=runCatching { LogCategory.valueOf(j.getString("category")).label }.getOrDefault("未知")
                 "${j.optString("occurredAt")}  $label\n${j.optString("action")} ${j.optString("subject")}\n${j.optString("result")}" }.toList() }

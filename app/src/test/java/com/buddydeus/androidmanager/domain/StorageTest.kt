@@ -7,7 +7,7 @@ import java.time.*
 
 class StorageTest {
     @Test fun stateRoundtripPreservesRulesAndOwnedPolicies() {
-        val s=ManagerState(initialized=true,blacklist=setOf("a.b"), records=mapOf("a.b" to PolicyRecord(ownHidden=true,pending="SUSPEND",result="UNKNOWN")))
+        val s=ManagerState(initialized=true,blacklist=setOf("a.b"), records=mapOf("a.b" to PolicyRecord(ownHidden=true,pending="SUSPEND",result="UNKNOWN",unknownHidden=true,unknownSuspended=true)))
         assertEquals(s,StateCodec.decode(StateCodec.encode(s)))
     }
     @Test(expected=Exception::class) fun corruptStateIsNotEmptyDefaults() { StateCodec.decode("{bad") }
@@ -31,6 +31,7 @@ class StorageTest {
             audit.append(AuditEvent(LogCategory.CONFIG_CHANGE,"switch","ok",at=Instant.parse("2026-10-19T01:00:00Z")))
             audit.append(AuditEvent(LogCategory.LOGIN_SECURITY,"login","failed",at=Instant.parse("2026-10-19T01:01:00Z")))
             assertEquals(1,audit.readPage(LocalDate.of(2026,10,19),LogCategory.CONFIG_CHANGE,0,20).size)
+            assertTrue(audit.lastReadWarning.isNotEmpty())
         } finally { dir.deleteRecursively() }
     }
 }

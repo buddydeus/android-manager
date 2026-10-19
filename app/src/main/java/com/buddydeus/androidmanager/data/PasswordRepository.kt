@@ -16,6 +16,7 @@ interface PasswordAccess {
     fun inspect(): PasswordFileState
     fun writePin(pin: CharArray): String
     fun location(): String
+    fun needsDirectoryCommit(): Boolean = false
 }
 object PasswordCodec {
     fun fingerprint(text: String): String = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)))

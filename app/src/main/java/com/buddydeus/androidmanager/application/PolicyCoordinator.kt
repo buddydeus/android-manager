@@ -58,13 +58,14 @@ class PolicyCoordinator(
                 if(!tr.complete) log(AuditEvent(LogCategory.PERMISSION_ERROR,"时间策略",tr.message,revision=s.revision))
                 for((pkg,desired) in plan.targets) {
                     val app=apps[pkg]
+                    if(app?.updating==true) continue
                     if(app?.installed==false) {
                         s=save(s.copy(records=s.records+(pkg to PolicyRecord(result="UNINSTALLED",error="未安装"))))
                         continue
                     }
                     if(app==null) continue
                     val old=s.records[pkg]
-                    if(old!=null && old.instance!=0L && old.instance!=app.instance) s=save(s.copy(records=s.records-(pkg)))
+                    if(old!=null && old.instance!=app.instance) s=save(s.copy(records=s.records-(pkg)))
                     s=process(s,pkg,desired && catalog.protection(pkg).isEmpty(),app.instance)
                     val done=s.records[pkg]
                     if(pkg !in s.blacklist && done!=null && !done.ownHidden && !done.ownSuspended && done.pending.isEmpty() && done.result=="CONFIRMED") s=save(s.copy(records=s.records-pkg))
@@ -73,7 +74,7 @@ class PolicyCoordinator(
                 val alarm=schedule(if(s.enabled) next.nextBoundary else null)
                 if(alarm.startsWith("定时执行不可用") && alarm!=s.alarmStatus) log(AuditEvent(LogCategory.PERMISSION_ERROR,"边界调度",alarm,revision=s.revision))
                 val failures=s.records.values.count { it.result in setOf("FAILED","UNKNOWN","PARTIAL") }
-                val summary=if(failures==0 && tr.complete) if(s.enabled) "已核验当前策略" else "已关闭并解除本软件限制" else "存在执行异常，请查看逐项结果"
+                val summary=if(apps.values.any { it.updating && it.packageName in s.blacklist }) "部分应用正在更新，尚未完成核验" else if(failures==0 && tr.complete) if(s.enabled) "已核验当前策略" else "已关闭并解除本软件限制" else "存在执行异常，请查看逐项结果"
                 s=save(s.copy(alarmStatus=alarm,lastEvaluation=summary,lastPolicyBoot=bootId ?: s.lastPolicyBoot))
             } while(s.enabled && ScheduleEvaluator.evaluate(s.schedule,clock.instant()).active != time.active)
         } catch(e:Exception) {
@@ -82,50 +83,73 @@ class PolicyCoordinator(
         }
     }
     private fun process(initial:ManagerState,pkg:String,restrict:Boolean,instance:Long):ManagerState {
-        var s=initial;var record=s.records[pkg] ?: PolicyRecord(instance=instance)
+        var s=initial
+        var record=s.records[pkg] ?: PolicyRecord(instance=instance)
+        val failures=mutableListOf<String>()
         fun persist(r:PolicyRecord) { record=r;s=save(s.copy(records=s.records+(pkg to r))) }
         val observed=policy.inspect(pkg)
         if(record.pending.isNotEmpty()) {
-            val value=if(record.pending.contains("HIDE")) observed.hidden else observed.suspended
+            val hidden=record.pending in setOf("HIDE","UNHIDE")
+            val value=if(hidden) observed.hidden else observed.suspended
+            val owned=if(hidden) record.ownHidden else record.ownSuspended
             val applying=record.pending in setOf("HIDE","SUSPEND")
-            if(value==null || (applying && value==true && !(if(record.pending=="HIDE") record.ownHidden else record.ownSuspended))) {
-                persist(record.copy(result="UNKNOWN",error="上次调用中断，无法确认策略归属"));return s
+            if(applying && !owned && value!=false) {
+                persist(if(hidden) record.copy(pending="",unknownHidden=true) else record.copy(pending="",unknownSuspended=true))
+            } else if(!applying && value==false) {
+                persist(if(hidden) record.copy(pending="",ownHidden=false) else record.copy(pending="",ownSuspended=false))
+            } else persist(record.copy(pending=""))
+        }
+        persist(record.copy(
+            unknownHidden=(record.unknownHidden && observed.hidden!=false) || (observed.hidden==true && !record.ownHidden),
+            unknownSuspended=(record.unknownSuspended && observed.suspended!=false) || (observed.suspended==true && !record.ownSuspended),
+        ))
+        fun summarized(r:PolicyRecord):PolicyRecord {
+            val unknown=buildList {
+                if(r.unknownHidden) add("外部或归属未知的隐藏限制")
+                if(r.unknownSuspended) add("外部或归属未知的暂停限制")
             }
-            persist(when(record.pending) {
-                "UNHIDE" -> if(value==false) record.copy(ownHidden=false,pending="") else record.copy(pending="")
-                "UNSUSPEND" -> if(value==false) record.copy(ownSuspended=false,pending="") else record.copy(pending="")
-                else -> record.copy(pending="")
-            })
+            val result=when {
+                unknown.isNotEmpty() -> "UNKNOWN"
+                failures.isNotEmpty() -> if(r.ownHidden || r.ownSuspended) "PARTIAL" else "FAILED"
+                else -> "CONFIRMED"
+            }
+            return r.copy(result=result,error=(unknown+failures).joinToString("；"))
         }
         fun step(name:String,target:Boolean,hidden:Boolean):Boolean {
+            if(if(hidden) record.unknownHidden else record.unknownSuspended) return false
             val current=policy.inspect(pkg).let { if(hidden) it.hidden else it.suspended }
             val owned=if(hidden) record.ownHidden else record.ownSuspended
             if(!target && !owned) return true
-            if(target && current==true) {
-                if(owned) return true
-                persist(record.copy(result="UNKNOWN",error="已存在外部或归属未知的限制"));return false
+            if(target && current==true && owned) return true
+            if(target && (current==null || (current==true && !owned))) {
+                persist(summarized(if(hidden) record.copy(unknownHidden=true) else record.copy(unknownSuspended=true)))
+                return false
             }
-            if(target && current==null) { persist(record.copy(result="UNKNOWN",error="无法查询当前策略"));return false }
             if(!target && current==false) {
-                persist(if(hidden) record.copy(ownHidden=false) else record.copy(ownSuspended=false));return true
+                persist(summarized(if(hidden) record.copy(ownHidden=false) else record.copy(ownSuspended=false)));return true
             }
-            if(target && catalog.protection(pkg).isNotEmpty()) { persist(record.copy(result="FAILED",error="应用已受保护"));return false }
-            persist(record.copy(pending=name,result="PREPARED",operationId=UUID.randomUUID().toString(),revision=s.revision,baselineSuspended=policy.inspect(pkg).suspended,baselineHidden=policy.inspect(pkg).hidden))
+            if(target && catalog.protection(pkg).isNotEmpty()) {
+                failures+="$name：应用已受保护";persist(summarized(record));return false
+            }
+            val before=policy.inspect(pkg)
+            persist(record.copy(pending=name,result="PREPARED",operationId=UUID.randomUUID().toString(),revision=s.revision,baselineSuspended=before.suspended,baselineHidden=before.hidden))
             val result=if(hidden) policy.setHidden(pkg,target) else policy.setSuspended(pkg,target)
             if(result.success) {
-                persist((if(hidden) record.copy(ownHidden=target) else record.copy(ownSuspended=target)).copy(pending="",error="",result="CONFIRMED"))
-            } else persist(record.copy(pending="",result="FAILED",error=result.reason))
+                val changed=if(hidden) record.copy(ownHidden=target,pending="") else record.copy(ownSuspended=target,pending="")
+                persist(summarized(changed))
+            } else {
+                failures+="$name：${result.reason}";persist(summarized(record.copy(pending="")))
+            }
             log(AuditEvent(LogCategory.POLICY_EXECUTION,name,if(result.success) "成功" else result.reason,pkg,s.revision))
             return result.success
         }
         if(restrict) {
-            if(!step("SUSPEND",true,false)) return s
-            if(!step("HIDE",true,true) && record.ownSuspended) persist(record.copy(result="PARTIAL"))
+            if(step("SUSPEND",true,false)) step("HIDE",true,true)
         } else {
-            val unhide=step("UNHIDE",false,true)
-            val unsuspend=step("UNSUSPEND",false,false)
-            if(unhide && unsuspend && record.pending.isEmpty()) persist(record.copy(result="CONFIRMED",error=""))
+            step("UNHIDE",false,true)
+            step("UNSUSPEND",false,false)
         }
+        persist(summarized(record))
         return s
     }
 }

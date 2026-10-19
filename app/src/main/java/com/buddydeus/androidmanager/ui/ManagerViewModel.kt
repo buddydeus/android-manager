@@ -31,7 +31,7 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
         if(mutable.value.busy) return
         val epoch=generation.get();mutable.update { it.copy(busy=true,message="") }
         viewModelScope.launch(Dispatchers.IO) {
-            try { block(epoch) } catch(e:Exception) { post(epoch) { it.copy(message=e.message ?: "操作失败") } }
+            try { if(epoch==generation.get()) block(epoch) } catch(e:Exception) { post(epoch) { it.copy(message=e.message ?: "操作失败") } }
             finally { post(epoch) { it.copy(busy=false) } }
         }
     }
@@ -57,20 +57,25 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
         graph.credentials.passwords.selectDirectory(uri)
         post(epoch) { it.copy(screen=if(recovering) Screen.NEW_PIN else Screen.LOGIN,location=graph.credentials.passwords.location(),message=if(recovering) "请设置至少6位数字的新密码" else "目录已授权，请验证密码；首次使用输入 0000") }
     }
-    fun recover()=task { epoch ->
-        check(graph.credentials.auth.beginRecovery()) { "当前密码文件可验证，请正常登录" }
-        recovering=true;post(epoch) { it.copy(screen=Screen.DIRECTORY,message="重新选择本地密码目录，随后设置新密码") }
+    fun recover() {
+        val token=graph.credentials.auth.generationToken()
+        task { epoch ->
+            check(graph.credentials.auth.beginRecovery(token)) { "恢复请求已失效或当前文件可正常验证" }
+            if(epoch==generation.get()) recovering=true
+            post(epoch) { it.copy(screen=Screen.DIRECTORY,message="重新选择本地密码目录，随后设置新密码") }
+        }
     }
-    private fun authenticated(epoch:Long,result:AuthResult) {
+    private fun authenticated(epoch:Long,result:AuthResult,token:Long) {
+        if(epoch!=generation.get()) return
         when(result) {
             AuthResult.NeedsNewPin -> post(epoch) { it.copy(screen=Screen.NEW_PIN,message="请设置至少6位数字的新密码") }
             AuthResult.Authenticated -> {
-                if(!graph.credentials.auth.requireSession()) { post(epoch) { it.copy(screen=Screen.LOGIN,message="验证已失效") };return }
+                if(!graph.credentials.auth.requireSession(token)) { post(epoch) { it.copy(screen=Screen.LOGIN,message="验证已失效") };return }
                 val s=graph.coordinator.refresh()
                 if(!s.initialized) {
                     check(graph.policy.isOwner()) { "尚未取得 Device Owner" }
                     check(graph.context.getSystemService(android.os.UserManager::class.java).isSystemUser) { "仅支持主用户" }
-                    graph.coordinator.updateConfig("完成首次初始化") { check(graph.credentials.auth.requireSession());it.copy(initialized=true) }
+                    graph.coordinator.updateConfig("完成首次初始化") { check(epoch==generation.get() && graph.credentials.auth.requireSession(token));it.copy(initialized=true) }
                 }
                 post(epoch) { it.copy(screen=Screen.MAIN,location=graph.credentials.passwords.location(),logs=emptyList()) }
                 graph.request("认证后核验")
@@ -78,16 +83,25 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
             is AuthResult.Denied -> post(epoch) { it.copy(message=result.message) }
         }
     }
-    fun login(pin:String)=task { authenticated(it,graph.credentials.auth.login(pin.toCharArray())) }
-    fun setPin(pin:String,confirmation:String)=task { epoch ->
-        require(pin==confirmation) { "两次密码不一致" }
-        authenticated(epoch,graph.credentials.auth.setNewPin(pin.toCharArray()))
+    fun login(pin:String) {
+        val token=graph.credentials.auth.generationToken()
+        task { authenticated(it,graph.credentials.auth.login(pin.toCharArray(),token),token) }
     }
-    private fun command(action:String,transform:(ManagerState)->ManagerState)=task { epoch ->
-        val c=graph.credentials
-        if(!c.auth.requireSession()) { post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),message="请重新登录") };return@task }
-        graph.coordinator.updateConfig(action) { check(c.auth.requireSession()) { "会话已失效" };transform(it) }
-        post(epoch) { it.copy(message="已保存，正在应用") };graph.request(action)
+    fun setPin(pin:String,confirmation:String) {
+        val token=graph.credentials.auth.generationToken()
+        task { epoch ->
+            require(pin==confirmation) { "两次密码不一致" }
+            authenticated(epoch,graph.credentials.auth.setNewPin(pin.toCharArray(),token),token)
+        }
+    }
+    private fun command(action:String,transform:(ManagerState)->ManagerState) {
+        val token=graph.credentials.auth.generationToken()
+        task { epoch ->
+            val c=graph.credentials
+            if(!c.auth.requireSession(token)) { post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),message="请重新登录") };return@task }
+            graph.coordinator.updateConfig(action) { check(epoch==generation.get() && c.auth.requireSession(token)) { "会话已失效" };transform(it) }
+            post(epoch) { it.copy(message="已保存，正在应用") };graph.request(action)
+        }
     }
     fun setEnabled(enabled:Boolean)=command("切换总开关") { it.copy(enabled=enabled) }
     fun setBlacklisted(pkg:String,selected:Boolean)=command("修改黑名单") {
@@ -95,15 +109,21 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
         it.copy(blacklist=if(selected) it.blacklist+pkg else it.blacklist-pkg)
     }
     fun saveSchedule(schedule:List<DayWindow?>)=command("修改周时间表") { require(schedule.size==7);it.copy(schedule=schedule) }
-    fun changePin(pin:String,confirmation:String)=task { epoch ->
-        require(pin==confirmation) { "两次密码不一致" }
-        val result=graph.credentials.auth.changePin(pin.toCharArray())
-        post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),message=(result as? AuthResult.Denied)?.message.orEmpty()) }
+    fun changePin(pin:String,confirmation:String) {
+        val token=graph.credentials.auth.generationToken()
+        task { epoch ->
+            require(pin==confirmation) { "两次密码不一致" }
+            val result=graph.credentials.auth.changePin(pin.toCharArray(),token)
+            post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),message=(result as? AuthResult.Denied)?.message.orEmpty()) }
+        }
     }
-    fun loadLogs(date:String,category:LogCategory?,offset:Int)=task { epoch ->
-        check(graph.credentials.auth.requireSession()) { "请重新登录" }
-        val rows=graph.audit.readPage(LocalDate.parse(date),category,offset,50)
-        if(graph.credentials.auth.requireSession()) post(epoch) { it.copy(logs=rows) }
-        else post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList()) }
+    fun loadLogs(date:String,category:LogCategory?,offset:Int) {
+        val token=graph.credentials.auth.generationToken()
+        task { epoch ->
+            check(graph.credentials.auth.requireSession(token)) { "请重新登录" }
+            val rows=graph.audit.readPage(LocalDate.parse(date),category,offset,50)
+            if(graph.credentials.auth.requireSession(token)) post(epoch) { it.copy(logs=rows,message=graph.audit.lastReadWarning) }
+            else post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList()) }
+        }
     }
 }

@@ -14,12 +14,17 @@ import android.provider.Settings
 import com.buddydeus.androidmanager.application.ManagerGraph
 
 class ManagerEventService:DeviceAdminService() {
-    private val receiver=object:BroadcastReceiver() { override fun onReceive(context:Context,intent:Intent) { PolicyExecutionService.enqueue(context,intent.action.orEmpty()) } }
+    private val receiver=object:BroadcastReceiver() {
+        override fun onReceive(context:Context,intent:Intent) {
+            ManagerGraph.get(context).catalog.packageEvent(intent.action,intent.data?.schemeSpecificPart,intent.getBooleanExtra(Intent.EXTRA_REPLACING,false))
+            PolicyExecutionService.enqueue(context,intent.action.orEmpty())
+        }
+    }
     private val roleReceiver=object:BroadcastReceiver() { override fun onReceive(context:Context,intent:Intent) { PolicyExecutionService.enqueue(context,"系统角色变化") } }
     private val observer=object:ContentObserver(Handler(Looper.getMainLooper())) { override fun onChange(selfChange:Boolean) { PolicyExecutionService.enqueue(this@ManagerEventService,"时间或输入法配置变化") } }
     override fun onCreate() {
         super.onCreate()
-        val packages=IntentFilter().apply { addAction(Intent.ACTION_PACKAGE_ADDED);addAction(Intent.ACTION_PACKAGE_REMOVED);addAction(Intent.ACTION_PACKAGE_REPLACED);addAction(Intent.ACTION_PACKAGE_CHANGED);addDataScheme("package") }
+        val packages=IntentFilter().apply { addAction(Intent.ACTION_PACKAGE_ADDED);addAction(Intent.ACTION_PACKAGE_REMOVED);addAction(Intent.ACTION_PACKAGE_REPLACED);addAction(Intent.ACTION_PACKAGE_CHANGED);addAction(Intent.ACTION_PACKAGE_FULLY_REMOVED);addDataScheme("package") }
         val roles=IntentFilter().apply { addAction(Intent.ACTION_INPUT_METHOD_CHANGED);addAction("android.intent.action.PREFERRED_ACTIVITY_CHANGED");addAction("android.telecom.action.DEFAULT_DIALER_CHANGED");addAction(Intent.ACTION_DATE_CHANGED) }
         ContextCompat.registerReceiver(this,receiver,packages,ContextCompat.RECEIVER_NOT_EXPORTED)
         ContextCompat.registerReceiver(this,roleReceiver,roles,ContextCompat.RECEIVER_NOT_EXPORTED)
