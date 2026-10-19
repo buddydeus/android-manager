@@ -1,9 +1,32 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
-    <application android:label="应用管控" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- Device Owner requires visibility of launchable, hidden, and remembered managed packages. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <application android:label="应用管控" android:theme="@style/AppTheme" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:icon="@drawable/ic_manager" android:supportsRtl="true">
         <receiver android:name=".platform.ManagerAdminReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true" android:directBootAware="true">
             <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin"/>
             <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/></intent-filter>
+        </receiver>
+        <service android:name=".platform.ManagerEventService" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true" android:enabled="false" android:directBootAware="true">
+            <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_SERVICE"/></intent-filter>
+        </service>
+        <service android:name=".platform.PolicyExecutionService" android:exported="false" android:foregroundServiceType="systemExempted" android:directBootAware="true"/>
+        <receiver android:name=".platform.AlarmReceiver" android:exported="false" android:directBootAware="true"/>
+        <receiver android:name=".platform.BootReceiver" android:exported="false" android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.USER_UNLOCKED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.TIME_SET"/>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"/>
+            </intent-filter>
         </receiver>
         <activity android:name=".ui.MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>

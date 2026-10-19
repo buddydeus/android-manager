@@ -16,3 +16,5 @@
 - 已实现 AppCatalog、动态保护与 DPM 适配；不得通过隐藏绕过暂停拒绝。当前实机 DO 注册因账户被拒绝，不得写成管控能力通过。
 
 - PolicyCoordinator 是配置和系统变更唯一串行入口：先持久意图、后调用、再保存回执；PREPARED 归属不明不得盲目解除。
+
+- ManagerGraph 只在 credentials 懒加载时创建 CE/SAF；开机路径禁止触碰。事件监听受 DO 系统绑定，执行服务使用 systemExempted，结束即停止。
