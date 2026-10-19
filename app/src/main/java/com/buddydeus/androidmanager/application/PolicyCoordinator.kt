@@ -19,6 +19,10 @@ class PolicyCoordinator(
     private val mutableError=MutableStateFlow("")
     val errors=mutableError.asStateFlow()
     private fun save(s:ManagerState):ManagerState { store.write(s);mutableState.value=s;return s }
+    fun reportFailure(action:String,reason:String) {
+        mutableError.value="$action：$reason"
+        log(AuditEvent(LogCategory.PERMISSION_ERROR,action,reason))
+    }
     fun refresh():ManagerState=synchronized(lock) { try { store.read().also { mutableState.value=it } } catch(e:Exception) { mutableError.value=e.message ?: "配置读取失败";throw e } }
     private fun log(e:AuditEvent) { try { audit.append(e) } catch(ex:Exception) { mutableError.value="日志写入失败" } }
     fun updateConfig(action:String,transform:(ManagerState)->ManagerState):ManagerState=synchronized(lock) {
@@ -43,7 +47,8 @@ class PolicyCoordinator(
             // A boundary crossed during a batch is evaluated again before the service stops.
             do {
                 val time=ScheduleEvaluator.evaluate(s.schedule,clock.instant())
-                val known=s.appCache.toMutableMap();(s.blacklist+s.records.keys).forEach { p -> known.putIfAbsent(p,AppEntry(p,p)) }
+                val interesting=s.blacklist+s.records.keys
+                val known=s.appCache.filterKeys { it in interesting }.toMutableMap();interesting.forEach { p -> known.putIfAbsent(p,AppEntry(p,p)) }
                 val apps=catalog.load(known)
                 s=save(s.copy(appCache=apps))
                 val plan=PolicyPlanner.plan(s,apps,time.active)
@@ -61,9 +66,12 @@ class PolicyCoordinator(
                     val old=s.records[pkg]
                     if(old!=null && old.instance!=0L && old.instance!=app.instance) s=save(s.copy(records=s.records-(pkg)))
                     s=process(s,pkg,desired && catalog.protection(pkg).isEmpty(),app.instance)
+                    val done=s.records[pkg]
+                    if(pkg !in s.blacklist && done!=null && !done.ownHidden && !done.ownSuspended && done.pending.isEmpty() && done.result=="CONFIRMED") s=save(s.copy(records=s.records-pkg))
                 }
                 val next=ScheduleEvaluator.evaluate(s.schedule,clock.instant())
                 val alarm=schedule(if(s.enabled) next.nextBoundary else null)
+                if(alarm.startsWith("定时执行不可用") && alarm!=s.alarmStatus) log(AuditEvent(LogCategory.PERMISSION_ERROR,"边界调度",alarm,revision=s.revision))
                 val failures=s.records.values.count { it.result in setOf("FAILED","UNKNOWN","PARTIAL") }
                 val summary=if(failures==0 && tr.complete) if(s.enabled) "已核验当前策略" else "已关闭并解除本软件限制" else "存在执行异常，请查看逐项结果"
                 s=save(s.copy(alarmStatus=alarm,lastEvaluation=summary,lastPolicyBoot=bootId ?: s.lastPolicyBoot))

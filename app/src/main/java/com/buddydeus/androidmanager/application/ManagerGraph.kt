@@ -27,7 +27,7 @@ class ManagerGraph private constructor(val context:Context) {
         check(context.getSystemService(UserManager::class.java).isUserUnlocked) { "请先解锁手机" }
         Credentials(context,audit)
     }
-    fun request(reason:String) { PolicyExecutionService.enqueue(context,reason) }
+    fun request(reason:String) { if(policy.isOwner()) PolicyExecutionService.enqueue(context,reason) else coordinator.reconcile(reason) }
     fun bootCount()=Settings.Global.getInt(context.contentResolver,Settings.Global.BOOT_COUNT,-1)
     companion object {
         // Only applicationContext is retained; Activity contexts never escape.

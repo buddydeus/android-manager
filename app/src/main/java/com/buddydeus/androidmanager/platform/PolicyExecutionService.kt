@@ -49,7 +49,7 @@ class PolicyExecutionService:Service() {
             } catch(e:Exception) { report(context,"无法启动管控任务",e) }
         }
         private fun report(context:Context,action:String,e:Exception) {
-            runCatching { ManagerGraph.get(context).audit.append(AuditEvent(LogCategory.PERMISSION_ERROR,action,e.javaClass.simpleName)) }
+            runCatching { ManagerGraph.get(context).coordinator.reportFailure(action,e.javaClass.simpleName) }
         }
     }
 }

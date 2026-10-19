@@ -27,6 +27,12 @@ class PolicyCoordinatorTest {
     private val catalog=object:CatalogPort { override fun load(known:Map<String,AppEntry>)=mapOf("test.app" to AppEntry("test.app","Test",instance=1));override fun protection(packageName:String)="" }
     private fun active()=ManagerState(initialized=true,blacklist=setOf("test.app"),schedule=List(7){DayWindow(0,1439)})
     private fun coordinator(store:Store,port:Port)=PolicyCoordinator(store,catalog,port,AuditSink{},Clock.fixed(Instant.parse("2026-10-19T04:00:00Z"),ZoneOffset.UTC))
+    @Test fun deniedAlarmCapabilityIsAudited() {
+        val events=mutableListOf<AuditEvent>()
+        val s=Store(active());val p=Port()
+        PolicyCoordinator(s,catalog,p,AuditSink { events+=it },Clock.fixed(Instant.parse("2026-10-19T04:00:00Z"),ZoneOffset.UTC),schedule={"定时执行不可用：权限不足"}).reconcile("test")
+        assertTrue(events.any { it.category==LogCategory.PERMISSION_ERROR && it.action=="边界调度" })
+    }
     @Test fun suspensionFailureNeverFallsBackToHiding() {
         val s=Store(active());val p=Port().apply { suspendFails=true };coordinator(s,p).reconcile("test")
         assertEquals(listOf("suspend:true"),p.calls);assertEquals("FAILED",s.state.records.getValue("test.app").result)

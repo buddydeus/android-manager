@@ -26,6 +26,26 @@ class AuthControllerTest {
         assertTrue(a.login("0000".toCharArray()) is AuthResult.Denied)
         time=300000;assertEquals(AuthResult.NeedsNewPin,a.login("0000".toCharArray()))
     }
+    @Test fun expiredPauseStartsANewFailureWindow() {
+        val p=Passwords();val m=Meta();var time=0L
+        val a=AuthController(p,m,AuditSink{}, {time},{time},{1})
+        repeat(5) { a.login("9999".toCharArray()) }
+        time=300000
+        a.login("9999".toCharArray())
+        assertEquals(0L,a.pausedMillis())
+    }
+    @Test fun storageFailureIsAuditedWithoutCredentialContents() {
+        val events=mutableListOf<AuditEvent>()
+        val p=object:PasswordAccess {
+            override fun inspect()=PasswordFileState.Broken("ACCESS_DENIED","storage denied")
+            override fun writePin(pin:CharArray)=""
+            override fun location()="test"
+        }
+        val a=AuthController(p,Meta(),AuditSink { events+=it }, {0},{0},{1})
+        a.login("123456".toCharArray())
+        assertTrue(events.any { it.category==LogCategory.PERMISSION_ERROR })
+        assertFalse(events.any { it.result.contains("123456") })
+    }
     @Test fun leavingDuringPasswordVerificationCannotReauthenticate() {
         val m=Meta();lateinit var a:AuthController
         val p=object:PasswordAccess {

@@ -21,6 +21,7 @@ class SafPasswordRepository(private val context: Context,private val metadata: A
         val parent=DocumentsContract.getTreeDocumentId(uri)
         val list=DocumentsContract.buildChildDocumentsUriUsingTree(uri,parent)
         return resolver.query(list,arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME),null,null,null)?.use { c ->
+            check(!c.extras.getBoolean(DocumentsContract.EXTRA_LOADING,false)) { "目录仍在加载" }
             buildList { while(c.moveToNext()) if(c.getString(1)=="password.json") add(DocumentsContract.buildDocumentUriUsingTree(uri,c.getString(0))) }
         } ?: error("无法查询密码目录")
     }
@@ -35,6 +36,7 @@ class SafPasswordRepository(private val context: Context,private val metadata: A
             files.size!=1 -> PasswordFileState.Broken("CORRUPT","存在重复密码文件")
             else -> { val text=read(files.single());PasswordCodec.validate(text);PasswordFileState.Ready(text,PasswordCodec.fingerprint(text)) } }
     } catch(e: SecurityException) { PasswordFileState.Broken("ACCESS_DENIED","密码目录授权失效") }
+    catch(e: org.json.JSONException) { PasswordFileState.Broken("CORRUPT","密码文件损坏") }
     catch(e: IllegalArgumentException) { PasswordFileState.Broken("CORRUPT","密码文件或目录格式异常") }
     catch(e: Exception) { PasswordFileState.Broken("IO_ERROR","密码存储不可访问") }
     override fun writePin(pin: CharArray): String {

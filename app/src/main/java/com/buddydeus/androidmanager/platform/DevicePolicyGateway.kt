@@ -26,7 +26,10 @@ class DevicePolicyGateway(private val context: Context) : DevicePolicyPort {
     } catch(e:Exception) { PolicyStepResult(false,describe(e)) }
     override fun applyTime(enabled: Boolean,owned: Boolean): TimePolicyResult {
         if(!isOwner()) return TimePolicyResult(owned,false,"未取得 Device Owner")
-        val errors=mutableListOf<String>();var own=owned
+        val errors=mutableListOf<String>()
+        val actual=try { dpm.getUserRestrictions(admin).getBoolean(UserManager.DISALLOW_CONFIG_DATE_TIME) || (Build.VERSION.SDK_INT>=34 && dpm.getUserRestrictionsGlobally().getBoolean(UserManager.DISALLOW_CONFIG_DATE_TIME)) }
+        catch(e:Exception) { return TimePolicyResult(owned,false,"无法确认本管理员时间限制") }
+        var own=owned || actual
         fun step(label:String,block:()->Unit) { try { block() } catch(e:Exception) { errors+="$label：${describe(e)}" } }
         if(enabled) {
             step("自动校时") { if(!dpm.getAutoTimeEnabled(admin)) dpm.setAutoTimeEnabled(admin,true) }
@@ -37,7 +40,7 @@ class DevicePolicyGateway(private val context: Context) : DevicePolicyPort {
                 if(!present) dpm.addUserRestriction(admin,UserManager.DISALLOW_CONFIG_DATE_TIME)
                 own=true
             }
-        } else if(owned) {
+        } else if(own) {
             step("解除时间限制") { dpm.clearUserRestriction(admin,UserManager.DISALLOW_CONFIG_DATE_TIME);own=false }
         }
         return TimePolicyResult(own,errors.isEmpty(),if(errors.isEmpty()) if(enabled) "时间策略已启用" else "时间限制已解除" else errors.joinToString("；"))

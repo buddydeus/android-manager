@@ -16,8 +16,16 @@ class AuthController(
     private var generation=0L
     private var fingerprint: String?=null
     private var maySetPin=false
+    @Volatile private var lastStorageFailure:String?=null
     fun invalidate() { synchronized(lock) { generation++;fingerprint=null;maySetPin=false } }
     private fun log(action: String,result: String) { audit.append(AuditEvent(LogCategory.LOGIN_SECURITY,action,result)) }
+    fun inspectPassword():PasswordFileState {
+        val value=passwords.inspect()
+        val kind=(value as? PasswordFileState.Broken)?.kind
+        if(kind!=null && kind!=lastStorageFailure) audit.append(AuditEvent(LogCategory.PERMISSION_ERROR,"密码存储",kind))
+        lastStorageFailure=kind
+        return value
+    }
     fun pausedMillis(): Long {
         val m=metadata.read()
         return (if(m.boot==boot()) m.elapsedUntil-elapsed() else m.wallUntil-wall()).coerceIn(0,300000)
@@ -26,7 +34,9 @@ class AuthController(
         val epoch=synchronized(lock) { generation }
         try {
             if(pausedMillis()>0) return AuthResult.Denied("登录暂停，请稍后再试")
-            val file=passwords.inspect()
+            val previous=metadata.read()
+            if(previous.failures>=5) metadata.write(previous.copy(failures=0,wallUntil=0,elapsedUntil=0))
+            val file=inspectPassword()
             if(file is PasswordFileState.Broken) return AuthResult.Denied(file.reason)
             val valid=when(file) { is PasswordFileState.Ready -> PasswordCodec.verify(file.content,pin);PasswordFileState.Missing -> pin.contentEquals(charArrayOf('0','0','0','0'));else -> false }
             if(!valid) {
@@ -44,7 +54,7 @@ class AuthController(
         } finally { pin.fill('\u0000') }
     }
     fun beginRecovery(): Boolean {
-        if(passwords.inspect() !is PasswordFileState.Broken) return false
+        if(inspectPassword() !is PasswordFileState.Broken) return false
         synchronized(lock) { generation++;fingerprint=null;maySetPin=true };return true
     }
     fun setNewPin(pin: CharArray): AuthResult {
@@ -57,7 +67,7 @@ class AuthController(
     }
     fun requireSession(): Boolean {
         val expected=synchronized(lock) { fingerprint } ?: return false
-        val current=passwords.inspect()
+        val current=inspectPassword()
         val valid=current is PasswordFileState.Ready && current.fingerprint==expected
         if(!valid) invalidate()
         return valid && synchronized(lock) { fingerprint==expected }

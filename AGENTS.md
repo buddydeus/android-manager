@@ -18,3 +18,7 @@
 - PolicyCoordinator 是配置和系统变更唯一串行入口：先持久意图、后调用、再保存回执；PREPARED 归属不明不得盲目解除。
 
 - ManagerGraph 只在 credentials 懒加载时创建 CE/SAF；开机路径禁止触碰。事件监听受 DO 系统绑定，执行服务使用 systemExempted，结束即停止。
+
+- 管理界面通过 ManagerViewModel 统一授权；离开/锁屏清会话及日志，异步结果以 generation 拒绝过期回填。目录选择只用于未登录初始化/恢复。
+
+- 密码存储异常、闹钟能力不足及执行服务启动失败须进入权限异常日志；UI 展示同一错误，不能只保留“正在应用”。
