@@ -1,0 +1,10 @@
+.reviews
+
+docs/superpowers
+.superpowers/
+
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.swp
