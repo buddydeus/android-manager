@@ -143,17 +143,17 @@ import java.time.LocalDate
             Card {
                 Column(Modifier.padding(10.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) { Text(name,Modifier.weight(1f));Text(if(windows[i]) "限制" else "本日不设置");Switch(windows[i],{v -> windows=windows.toMutableList().also { it[i]=v }},enabled=!state.busy) }
-                    if(windows[i]) Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick={
-                            starts=starts.toMutableList().also { it[i]=0 }
-                            ends=ends.toMutableList().also { it[i]=1439 }
-                        },enabled=!state.busy,modifier=Modifier.heightIn(min=48.dp)) {
-                            Text(if(starts[i]==0 && ends[i]==1439) "${name}全天（已选择）" else "${name}设为全天")
-                        }
-                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            TimeSelectionButton("${name}开始时间",starts[i],Modifier.weight(1f),!state.busy) { v->starts=starts.toMutableList().also { it[i]=v } }
-                            TimeSelectionButton("${name}结束时间",ends[i],Modifier.weight(1f),!state.busy) { v->ends=ends.toMutableList().also { it[i]=v } }
-                        }
+                    OutlinedButton(onClick={
+                        windows=windows.toMutableList().also { it[i]=true }
+                        starts=starts.toMutableList().also { it[i]=0 }
+                        ends=ends.toMutableList().also { it[i]=1439 }
+                        error=""
+                    },enabled=!state.busy,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {
+                        Text(if(windows[i] && starts[i]==0 && ends[i]==1439) "${name}全天（已选择）" else "${name}设为全天")
+                    }
+                    if(windows[i]) Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        TimeSelectionButton("${name}开始时间",starts[i],Modifier.weight(1f),!state.busy) { v->starts=starts.toMutableList().also { it[i]=v } }
+                        TimeSelectionButton("${name}结束时间",ends[i],Modifier.weight(1f),!state.busy) { v->ends=ends.toMutableList().also { it[i]=v } }
                     }
                 }
             }
