@@ -9,7 +9,7 @@ Android 11+ 单机 Device Owner 应用。需求见 [requirement](docs/requiremen
 
 支持系统应用搜索、24小时时分选择、全天快捷设置及跨午夜时段、独立密码文件及恢复、登录暂停、上海时区策略、开机恢复和精确边界闹钟。初始化完成前不施加策略；密码存储异常不停止已有后台管控。系统拒绝或归属不明会明确展示，不盲目解除外部限制。
 
-界面设计候选稿见 [简洁版规范](designs/specs/android-manager-minimal.md)，其中附六个手机页面预览；当前尚未应用到 APK。
+界面采用白底蓝色的简洁布局，底部固定五项导航；规范与六页设计预览见 [界面规范](designs/specs/android-manager-minimal.md)。时间表以24小时细轨道辅助显示时段，保存按钮固定在导航上方；未保存草稿在切页、无关状态刷新及配置重建后保留，退出管理前提示丢弃。
 
 ## 构建与调试
 
@@ -23,6 +23,8 @@ adb -s SERIAL shell am start -W -n com.buddydeus.androidmanager/.ui.MainActivity
 ```
 
 调试 APK：`app/build/outputs/apk/debug/app-debug.apk`。Release 输出为未签名 APK，`debuggable=false`，正式分发前需使用管理员自己的签名配置。
+
+界面夹具测试：`ANDROID_SERIAL=EMULATOR_SERIAL ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.buddydeus.androidmanager.ui.ManagerInterfaceTest`。仅在模拟器运行，使用独立Compose宿主、固定数据和回调，不连接密码存储或DPM；截图输出到测试设备的应用外部目录 `files/ui-validation/`。
 
 设备基础测试：`ANDROID_SERIAL=SERIAL ./gradlew :app:connectedDebugAndroidTest`。测试中的完整协调策略用例只在明确指定 `policyTarget` 的独立模拟器运行。实机探针须显式传入 `physicalPolicyTarget`，拒绝受保护、已在黑名单或已有外部限制的应用；探针结束解除自身限制，不修改生产配置和时间策略。普通测试不自动选择应用施加策略。
 
@@ -50,6 +52,6 @@ adb -s SERIAL shell dpm set-device-owner com.buddydeus.androidmanager/.platform.
 
 ## 验证状态
 
-42 项单元测试、Lint、Debug 和 Release 构建通过。OPPO PKD130 / Android 15 已完成基础存储、应用目录、初始化入口与 SAF 查询验证，以及显式应用和后台边界探针。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化、恢复及重启应用登录检查。
+42 项单元测试、13 项模拟器界面测试、Lint、Debug 和 Release 构建通过。简洁界面实际截图见 [界面验证](designs/validation/minimal/)。OPPO PKD130 / Android 15 已完成基础存储、应用目录、初始化入口与 SAF 查询验证，以及显式应用和后台边界探针。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化、恢复及重启应用登录检查。
 
 OPPO 账户已由管理员移除，重新安装 APK 后 Device Owner 注册成功；实机小红书暂停、隐藏及恢复探针通过；系统市场可暂停，但 ColorOS 明确禁止隐藏，因此市场完整效果未通过。锁屏深度待机下可自动解除，但实测比边界晚约118秒，即时性不通过。通知展示等验收仍未完成，不能宣称此 ROM 完整兼容。临时黑名单和周表已清空，小红书恢复可用，总开关保留开启。实机空规则、开启状态的重启恢复通过；USB 连接通过不等于管控验收通过。

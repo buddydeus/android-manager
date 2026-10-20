@@ -90,3 +90,12 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 
 - 最新Debug APK（代码提交a95bd2f）覆盖安装至OPPO PKD130，`adb install -r`返回Success；启动MainActivity返回Status: ok。
 - 本次仅确认安装与启动成功，未执行全天按钮交互或实际边界验收。
+
+## 简洁界面实现与验证（2026-10-20）
+
+- 按已确认设计实现浅色蓝白主题、五项底部导航、行式应用/日志、独立全天按钮与24小时轨道、固定保存栏；登录、初始化、恢复及改密沿用现有授权入口。主题与设计见 `designs/specs/android-manager-minimal.md`。
+- JDK21/SDK36下 `testDebugUnitTest`、`lintDebug`、`assembleDebug`、`assembleRelease`、`assembleDebugAndroidTest` 通过；42项单元测试通过，Lint为0错误/18警告（依赖版本、备份兼容提示及既有KTX建议）。Release仍为非debuggable，不含Compose测试宿主。
+- 独立API36模拟器的ManagerInterfaceTest共13项通过：全天关闭日可用且只改草稿、保存提交、跨页/版本/配置重建保留草稿、忙碌禁用、受保护应用、双维策略结果、相等起止拦截、取消原生时分选择器、未保存退出提示、日志筛选结果匹配、日期与密码确认校验、大字及横屏。测试使用固定数据与回调，不连接ManagerGraph/SAF/DPM。
+- 最终全套界面测试在约375dp宽度、系统动画scale=0下通过；双倍字体与横屏截图人工查看。8张实际截图保存在 `designs/validation/minimal/`；模拟器density从460恢复为原420，动画scale原先即为0。
+- Gradle测试结束尝试卸载模拟器目标包时被既有Device Owner身份拒绝，未退管或清数据；测试结果为13通过/0失败/0跳过。测试APK与业务APK的清理不影响上述断言。
+- 本轮未安装到OPPO，也未操作实机管理员密码或规则；TalkBack人工、新版实机UI及ROM闹钟准点验收仍未进行。

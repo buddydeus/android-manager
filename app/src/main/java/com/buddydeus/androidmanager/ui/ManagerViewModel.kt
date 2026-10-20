@@ -12,9 +12,11 @@ import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicLong
 
 enum class Screen { OWNER, DIRECTORY, LOGIN, NEW_PIN, STORAGE_ERROR, MAIN }
+data class LogPageKey(val date:String,val category:LogCategory?,val offset:Int)
 data class ManagerUiState(
     val screen:Screen=Screen.LOGIN,val busy:Boolean=false,val message:String="",val config:ManagerState?=null,
     val error:String="",val location:String="",val owner:Boolean=false,val logs:List<String> = emptyList(),
+    val logsQuery:LogPageKey?=null,
 )
 class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
     private val mutable=MutableStateFlow(ManagerUiState())
@@ -37,7 +39,7 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
     }
     fun leave() {
         generation.incrementAndGet();graph.credentials.auth.invalidate();recovering=false
-        mutable.update { it.copy(screen=Screen.LOGIN,busy=false,logs=emptyList(),message="请重新验证密码") }
+        mutable.update { it.copy(screen=Screen.LOGIN,busy=false,logs=emptyList(),logsQuery=null,message="请重新验证密码") }
     }
     fun refresh()=task { epoch ->
         val s=graph.coordinator.refresh();val c=graph.credentials
@@ -77,7 +79,7 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
                     check(graph.context.getSystemService(android.os.UserManager::class.java).isSystemUser) { "仅支持主用户" }
                     graph.coordinator.updateConfig("完成首次初始化") { check(epoch==generation.get() && graph.credentials.auth.requireSession(token));it.copy(initialized=true) }
                 }
-                post(epoch) { it.copy(screen=Screen.MAIN,location=graph.credentials.passwords.location(),logs=emptyList()) }
+                post(epoch) { it.copy(screen=Screen.MAIN,location=graph.credentials.passwords.location(),logs=emptyList(),logsQuery=null) }
                 graph.request("认证后核验")
             }
             is AuthResult.Denied -> post(epoch) { it.copy(message=result.message) }
@@ -98,7 +100,7 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
         val token=graph.credentials.auth.generationToken()
         task { epoch ->
             val c=graph.credentials
-            if(!c.auth.requireSession(token)) { post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),message="请重新登录") };return@task }
+            if(!c.auth.requireSession(token)) { post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),logsQuery=null,message="请重新登录") };return@task }
             graph.coordinator.updateConfig(action) { check(epoch==generation.get() && c.auth.requireSession(token)) { "会话已失效" };transform(it) }
             post(epoch) { it.copy(message="已保存，正在应用") };graph.request(action)
         }
@@ -114,7 +116,7 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
         task { epoch ->
             require(pin==confirmation) { "两次密码不一致" }
             val result=graph.credentials.auth.changePin(pin.toCharArray(),token)
-            post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),message=(result as? AuthResult.Denied)?.message.orEmpty()) }
+            post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),logsQuery=null,message=(result as? AuthResult.Denied)?.message.orEmpty()) }
         }
     }
     fun loadLogs(date:String,category:LogCategory?,offset:Int) {
@@ -122,8 +124,8 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
         task { epoch ->
             check(graph.credentials.auth.requireSession(token)) { "请重新登录" }
             val rows=graph.audit.readPage(LocalDate.parse(date),category,offset,50)
-            if(graph.credentials.auth.requireSession(token)) post(epoch) { it.copy(logs=rows,message=graph.audit.lastReadWarning) }
-            else post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList()) }
+            if(graph.credentials.auth.requireSession(token)) post(epoch) { it.copy(logs=rows,logsQuery=LogPageKey(date,category,offset),message=graph.audit.lastReadWarning) }
+            else post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),logsQuery=null) }
         }
     }
     fun clearPin() {
@@ -133,7 +135,7 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
                 val result=graph.credentials.auth.clearPin(token)
                 post(epoch) { it.copy(message=(result as? AuthResult.Denied)?.message.orEmpty()) }
             } finally {
-                post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList()) }
+                post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList(),logsQuery=null) }
             }
         }
     }

@@ -3,13 +3,14 @@
 - 中文说明简洁，流程优先文本图；独立检查前提和冲突。
 - 不自动建分支；每个完成环节验证后提交，显式暂存本环节文件。
 - 代码/脚本变化同步更新 README.md 和本文件，删除过时说明。
-- 界面候选设计：designs/specs/android-manager-minimal.md；用户确认后再实现，预览与提示词必须配对，功能语义仍以需求和技术契约为准。
+- 界面设计SSOT：designs/specs/android-manager-minimal.md（已确认）；预览与提示词必须配对，主题token集中于ManagerTheme，功能语义仍以需求和技术契约为准。
 - 需求事实来源：docs/requirement.md；技术契约：docs/proposal.md；术语：GLOSSARY.md。
 - 不擅自撤回用户改动；.gitignore 和实施计划属于任务前置资料。
 
 ## 验证命令
 
 - JDK21、SDK36：`./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease`。
+- ManagerInterfaceTest仅在模拟器使用独立Compose宿主、固定数据与回调验证UI，不访问ManagerGraph、SAF或DPM；不要用实机配置做界面夹具。
 - 设备测试：`ANDROID_SERIAL=SERIAL ./gradlew :app:connectedDebugAndroidTest`；所有 ADB 命令指定 `-s SERIAL`。
 - 完整 DPM 协调测试在独立模拟器显式传入 `policyTarget`；实机单包探针须显式传入 `physicalPolicyTarget`，仅测试无既有管控的非黑名单包并在 finally 恢复；不得自动清除实机账户/数据、恢复出厂设置或退管。
 - 不与 instrumentation 同时运行外部 uiautomator；两者会争用 UiAutomation。UI dump失败时不得读取旧XML继续操作。
@@ -31,7 +32,9 @@
 - ManagerViewModel 统一授权；离开/锁屏清会话和日志。IO 提交时捕获认证 generation 并传入操作，不能仅丢弃过期 UI 回填。
 - 密码存储、闹钟和服务启动失败须记录权限异常并展示；损坏日志行跳过时显示提示。
 
-- 时间表每天独立显示全天按钮，不受当天开关控制；点击启用当天并将草稿设为00:00–23:59，保存后生效。结束分钟完整包含至第59秒；连续区间合并，整周连续限制不安排虚假边界。草稿用分钟整数；系统24小时时分选择器取消不修改草稿，随页面销毁释放，保留起止相等校验。
+- 时间表每天独立显示全天按钮，不受当天开关控制；点击启用当天并将草稿设为00:00–23:59，保存后生效。结束分钟完整包含至第59秒；连续区间合并，整周连续限制不安排虚假边界。草稿用分钟整数并在管理页面层保留；切页和无关配置版本变化不得清空，返回概览保留，退出管理前提示丢弃。系统24小时时分选择器取消不修改草稿，随页面销毁释放，保留起止相等校验。
 - 清空密码仅在当前会话/generation有效时通过SAF删除单个 password.json并复查缺失；不改管控配置或目录授权，删除尝试后清会话，失败不可报成功。禁止用实机管理员密码文件做自动化删除测试。
 
 - 登录页密码输入框下不展示默认密码说明文字。
+
+- 日志结果携带成功读取时的日期/分类/偏移；筛选不匹配时不把旧页显示为当前结果，会话清理同时清除查询标记。
