@@ -3,6 +3,7 @@
 - 中文说明简洁，流程优先文本图；独立检查前提和冲突。
 - 不自动建分支；每个完成环节验证后提交，显式暂存本环节文件。
 - 代码/脚本变化同步更新 README.md 和本文件，删除过时说明。
+- 界面候选设计：designs/specs/android-manager-minimal.md；用户确认后再实现，预览与提示词必须配对，功能语义仍以需求和技术契约为准。
 - 需求事实来源：docs/requirement.md；技术契约：docs/proposal.md；术语：GLOSSARY.md。
 - 不擅自撤回用户改动；.gitignore 和实施计划属于任务前置资料。
 

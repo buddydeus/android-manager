@@ -9,6 +9,8 @@ Android 11+ 单机 Device Owner 应用。需求见 [requirement](docs/requiremen
 
 支持系统应用搜索、24小时时分选择、全天快捷设置及跨午夜时段、独立密码文件及恢复、登录暂停、上海时区策略、开机恢复和精确边界闹钟。初始化完成前不施加策略；密码存储异常不停止已有后台管控。系统拒绝或归属不明会明确展示，不盲目解除外部限制。
 
+界面设计候选稿见 [简洁版规范](designs/specs/android-manager-minimal.md)，其中附六个手机页面预览；当前尚未应用到 APK。
+
 ## 构建与调试
 
 使用 JDK 21、Android SDK 36；设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
