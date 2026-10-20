@@ -40,9 +40,10 @@ class BackgroundBoundaryProbeTest {
                 val now=ZonedDateTime.now(ScheduleEvaluator.zone)
                 val end=now.withSecond(0).withNano(0).plusMinutes(3)
                 require(now.toLocalDate()==end.toLocalDate()) { "Run outside midnight transition" }
-                val windows=List(7) { if(it==now.dayOfWeek.value-1) DayWindow(0,end.hour*60+end.minute) else null }
+                val endMinute=end.minusMinutes(1)
+                val windows=List(7) { if(it==now.dayOfWeek.value-1) DayWindow(0,endMinute.hour*60+endMinute.minute) else null }
                 val fixture=JSONObject().put("revision",baseline.revision+1).put("day",now.dayOfWeek.value-1)
-                    .put("end",end.hour*60+end.minute).put("endEpoch",end.toEpochSecond())
+                    .put("end",endMinute.hour*60+endMinute.minute).put("endEpoch",end.toEpochSecond())
                 marker.writeText(fixture.toString())
                 try {
                     graph.coordinator.updateConfig("显式实机边界探针") {

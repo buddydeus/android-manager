@@ -13,7 +13,7 @@ object ScheduleEvaluator {
             schedule[day.dayOfWeek.value - 1]?.let { w ->
                 val start = day.atStartOfDay(zone).plusMinutes(w.startMinute.toLong()).toInstant()
                 val endDay = if (w.endMinute < w.startMinute) day.plusDays(1) else day
-                start to endDay.atStartOfDay(zone).plusMinutes(w.endMinute.toLong()).toInstant()
+                start to endDay.atStartOfDay(zone).plusMinutes(w.endMinute.toLong() + 1).toInstant()
             }
         }.sortedBy { it.first }
         val merged = mutableListOf<Pair<Instant, Instant>>()
@@ -22,6 +22,8 @@ object ScheduleEvaluator {
             if (last != null && r.first <= last.second) merged[merged.lastIndex] = last.first to maxOf(last.second, r.second)
             else merged += r
         }
+        // A continuous week repeats forever; the expansion horizon is not a real boundary.
+        if (merged.any { it.second >= it.first.plusSeconds(7 * 24 * 60 * 60L) }) return ScheduleState(true, null)
         return ScheduleState(merged.any { now >= it.first && now < it.second },
             merged.flatMap { listOf(it.first, it.second) }.filter { it > now }.minOrNull())
     }
