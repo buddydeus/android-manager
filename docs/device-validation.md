@@ -85,3 +85,8 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 42项单元测试通过，新增结束秒及小数秒、单日全天、跨周连续全天和整周全天无虚假闹钟验证。
 - JDK21 / SDK36 下 `testDebugUnitTest`、`lintDebug`、`assembleDebug`、`assembleRelease`、`assembleDebugAndroidTest` 通过；后台探针记录的结束分钟与实际解除边界同步调整。
 - 本次未安装或运行设备测试；以上验证不代表目标ROM的实际闹钟准点性或新版界面实测通过。
+
+## 全天独立按钮部署（2026-10-20）
+
+- 最新Debug APK（代码提交a95bd2f）覆盖安装至OPPO PKD130，`adb install -r`返回Success；启动MainActivity返回Status: ok。
+- 本次仅确认安装与启动成功，未执行全天按钮交互或实际边界验收。
