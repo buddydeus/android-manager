@@ -82,4 +82,15 @@ class AuthController(
             return AuthResult.Denied("密码已修改，请重新登录")
         } finally { pin.fill('\u0000') }
     }
+    fun clearPin(token:Long=generationToken()): AuthResult {
+        if(!requireSession(token)) return AuthResult.Denied("请重新登录")
+        try {
+            passwords.deletePin()
+            log("清空密码","成功")
+            return AuthResult.Denied("密码已清空，请使用 0000 登录并设置新密码")
+        } catch(e:Exception) {
+            log("清空密码","失败")
+            throw e
+        } finally { invalidate() }
+    }
 }

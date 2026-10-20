@@ -7,9 +7,10 @@ import org.junit.Test
 class AuthControllerTest {
     private class Meta : AuthMetadataStore { var value=AuthMetadata();override fun read()=value;override fun write(value:AuthMetadata){this.value=value} }
     private class Passwords : PasswordAccess {
-        var content:String?=null;var pendingDirectory=false
+        var content:String?=null;var pendingDirectory=false;var deletionFails=false
         override fun inspect()=content?.let { PasswordFileState.Ready(it,PasswordCodec.fingerprint(it)) } ?: PasswordFileState.Missing
         override fun writePin(pin:CharArray):String { content=PasswordCodec.create(pin);pendingDirectory=false;return PasswordCodec.fingerprint(content!!) }
+        override fun deletePin() { check(!deletionFails);content=null }
         override fun location()="test"
         override fun needsDirectoryCommit()=pendingDirectory
     }
@@ -40,6 +41,7 @@ class AuthControllerTest {
         val p=object:PasswordAccess {
             override fun inspect()=PasswordFileState.Broken("ACCESS_DENIED","storage denied")
             override fun writePin(pin:CharArray)=""
+            override fun deletePin()=error("No deletion expected")
             override fun location()="test"
         }
         val a=AuthController(p,Meta(),AuditSink { events+=it }, {0},{0},{1})
@@ -70,10 +72,38 @@ class AuthControllerTest {
         val p=object:PasswordAccess {
             override fun inspect():PasswordFileState { a.invalidate();return PasswordFileState.Missing }
             override fun writePin(pin:CharArray)=""
+            override fun deletePin()=error("No deletion expected")
             override fun location()="test"
         }
         a=AuthController(p,m,AuditSink{}, {0},{0},{1})
         assertTrue(a.login("0000".toCharArray()) is AuthResult.Denied)
         assertFalse(a.requireSession())
+    }
+    @Test fun clearPasswordRequiresAuthenticationAndInvalidatesSession() {
+        val p=Passwords();val events=mutableListOf<AuditEvent>()
+        val a=AuthController(p,Meta(),AuditSink { events+=it }, {0},{0},{1})
+        a.login("0000".toCharArray());a.setNewPin("123456".toCharArray())
+        a.clearPin()
+        assertNull(p.content);assertFalse(a.requireSession())
+        assertEquals(AuthResult.NeedsNewPin,a.login("0000".toCharArray()))
+        assertFalse(a.requireSession())
+        assertTrue(events.any { it.action=="清空密码" && it.result=="成功" })
+    }
+    @Test fun unauthenticatedOrStaleClearCannotDeletePassword() {
+        val p=Passwords();p.writePin("123456".toCharArray())
+        val a=AuthController(p,Meta(),AuditSink{}, {0},{0},{1})
+        a.clearPin();assertNotNull(p.content)
+        a.login("123456".toCharArray());val stale=a.generationToken()
+        a.invalidate();a.login("123456".toCharArray())
+        a.clearPin(stale);assertNotNull(p.content);assertTrue(a.requireSession())
+    }
+    @Test fun failedClearNeverReportsSuccessAndEndsSession() {
+        val p=Passwords();p.writePin("123456".toCharArray())
+        val events=mutableListOf<AuditEvent>()
+        val a=AuthController(p,Meta(),AuditSink { events+=it }, {0},{0},{1})
+        a.login("123456".toCharArray());p.deletionFails=true
+        assertTrue(runCatching { a.clearPin() }.isFailure)
+        assertNotNull(p.content);assertFalse(a.requireSession())
+        assertTrue(events.any { it.action=="清空密码" && it.result=="失败" })
     }
 }

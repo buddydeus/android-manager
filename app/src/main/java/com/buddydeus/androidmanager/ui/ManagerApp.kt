@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import android.app.TimePickerDialog
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.KeyboardType
@@ -78,6 +80,9 @@ import java.time.LocalDate
             Text("删除此文件可恢复默认密码；文件不可访问时可从登录入口重新设置。")
             OutlinedButton(onClick=onAlarms) { Text("检查精确闹钟授权") }
             PinForm("修改管理密码",true,state.busy,model::changePin)
+            HorizontalDivider()
+            Text("清空密码会删除 password.json 并退出管理；下次使用 0000 登录后须设置新密码，现有管控继续运行。")
+            OutlinedButton(onClick=model::clearPin,enabled=!state.busy,colors=ButtonDefaults.outlinedButtonColors(contentColor=MaterialTheme.colorScheme.error),modifier=Modifier.fillMaxWidth()) { Text("清空密码") }
         }
         4 -> LogsScreen(state,model)
     }
@@ -129,8 +134,8 @@ import java.time.LocalDate
 @Composable private fun ScheduleScreen(state:ManagerUiState,model:ManagerViewModel) {
     val config=state.config ?: return
     var windows by remember(config.revision) { mutableStateOf(config.schedule.map { it!=null }) }
-    var starts by remember(config.revision) { mutableStateOf(config.schedule.map { timeText(it?.startMinute ?: 540) }) }
-    var ends by remember(config.revision) { mutableStateOf(config.schedule.map { timeText(it?.endMinute ?: 1200) }) }
+    var starts by remember(config.revision) { mutableStateOf(config.schedule.map { it?.startMinute ?: 540 }) }
+    var ends by remember(config.revision) { mutableStateOf(config.schedule.map { it?.endMinute ?: 1200 }) }
     var error by remember { mutableStateOf("") }
     val days=listOf("周一","周二","周三","周四","周五","周六","周日")
     Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -140,20 +145,36 @@ import java.time.LocalDate
                 Column(Modifier.padding(10.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) { Text(name,Modifier.weight(1f));Text(if(windows[i]) "限制" else "本日不设置");Switch(windows[i],{v -> windows=windows.toMutableList().also { it[i]=v }}) }
                     if(windows[i]) Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(starts[i],{v->starts=starts.toMutableList().also { it[i]=v }},label={Text("开始 HH:mm")},singleLine=true,modifier=Modifier.weight(1f))
-                        OutlinedTextField(ends[i],{v->ends=ends.toMutableList().also { it[i]=v }},label={Text("结束 HH:mm")},singleLine=true,modifier=Modifier.weight(1f))
+                        TimeSelectionButton("${name}开始时间",starts[i],Modifier.weight(1f),!state.busy) { v->starts=starts.toMutableList().also { it[i]=v } }
+                        TimeSelectionButton("${name}结束时间",ends[i],Modifier.weight(1f),!state.busy) { v->ends=ends.toMutableList().also { it[i]=v } }
                     }
                 }
             }
         }
         if(error.isNotBlank()) Text(error,color=MaterialTheme.colorScheme.error)
-        Button(onClick={ runCatching { List(7) { i->if(windows[i]) DayWindow(parseTime(starts[i]),parseTime(ends[i])) else null } }.onSuccess { error="";model.saveSchedule(it) }.onFailure { error="请输入有效 HH:mm；起止时间不能相同" } },enabled=!state.busy) { Text("保存周时间表") }
+        Button(onClick={ runCatching { List(7) { i->if(windows[i]) DayWindow(starts[i],ends[i]) else null } }.onSuccess { error="";model.saveSchedule(it) }.onFailure { error="起止时间不能相同" } },enabled=!state.busy) { Text("保存周时间表") }
     }
 }
 private fun timeText(minute:Int)="%02d:%02d".format(minute/60,minute%60)
-private fun parseTime(text:String):Int {
-    require(text.matches(Regex("[0-9]{2}:[0-9]{2}")))
-    val h=text.substring(0,2).toInt();val m=text.substring(3).toInt();require(h in 0..23 && m in 0..59);return h*60+m
+@Composable private fun TimeSelectionButton(label:String,minute:Int,modifier:Modifier,enabled:Boolean,onSelect:(Int)->Unit) {
+    val context=LocalContext.current
+    var picking by remember { mutableStateOf(false) }
+    if(picking) DisposableEffect(context) {
+        val dialog=TimePickerDialog(context,{_,hour,selectedMinute -> onSelect(hour*60+selectedMinute)},minute/60,minute%60,true)
+        dialog.setTitle(label)
+        dialog.setButton(android.content.DialogInterface.BUTTON_POSITIVE,"确定",dialog)
+        dialog.setButton(android.content.DialogInterface.BUTTON_NEGATIVE,"取消",dialog)
+        dialog.setOnDismissListener { picking=false }
+        dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        dialog.show()
+        onDispose { dialog.dismiss() }
+    }
+    OutlinedButton(onClick={picking=true},enabled=enabled,modifier=modifier.heightIn(min=56.dp)) {
+        Column(horizontalAlignment=Alignment.CenterHorizontally) {
+            Text(label,style=MaterialTheme.typography.labelMedium)
+            Text(timeText(minute),style=MaterialTheme.typography.titleMedium)
+        }
+    }
 }
 @Composable private fun LogsScreen(state:ManagerUiState,model:ManagerViewModel) {
     var date by remember { mutableStateOf(LocalDate.now(ScheduleEvaluator.zone).toString()) }

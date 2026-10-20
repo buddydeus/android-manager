@@ -126,4 +126,15 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
             else post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList()) }
         }
     }
+    fun clearPin() {
+        val token=graph.credentials.auth.generationToken()
+        task { epoch ->
+            try {
+                val result=graph.credentials.auth.clearPin(token)
+                post(epoch) { it.copy(message=(result as? AuthResult.Denied)?.message.orEmpty()) }
+            } finally {
+                post(epoch) { it.copy(screen=Screen.LOGIN,logs=emptyList()) }
+            }
+        }
+    }
 }

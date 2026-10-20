@@ -8,6 +8,7 @@ import android.provider.DocumentsContract
 
 class SafPasswordRepository(
     private val context: Context,private val metadata: AuthMetadataStore,
+    private val removeDocument:(Uri)->Boolean = { DocumentsContract.deleteDocument(context.contentResolver,it) },
     private val queryDirectory:(Uri,Array<String>)->Cursor? = { uri,columns -> context.contentResolver.query(uri,columns,null,null,null) },
 ) : PasswordAccess {
     private val resolver get()=context.contentResolver
@@ -54,5 +55,12 @@ class SafPasswordRepository(
         return PasswordCodec.fingerprint(saved)
     }
     override fun needsDirectoryCommit(): Boolean = candidate!=null
+    override fun deletePin() {
+        val directory=tree()
+        val files=children(directory)
+        check(files.size<=1) { "存在重复密码文件，未执行删除" }
+        files.singleOrNull()?.let { check(removeDocument(it)) { "删除密码文件失败" } }
+        check(children(directory).isEmpty()) { "密码文件仍存在，未完成清空" }
+    }
     override fun location(): String = runCatching { DocumentsContract.getTreeDocumentId(tree())+"/password.json" }.getOrDefault("未选择密码目录")
 }

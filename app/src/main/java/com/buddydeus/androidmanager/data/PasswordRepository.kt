@@ -15,6 +15,7 @@ sealed class PasswordFileState {
 interface PasswordAccess {
     fun inspect(): PasswordFileState
     fun writePin(pin: CharArray): String
+    fun deletePin()
     fun location(): String
     fun needsDirectoryCommit(): Boolean = false
 }

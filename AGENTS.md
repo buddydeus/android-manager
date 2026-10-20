@@ -11,7 +11,7 @@
 - JDK21、SDK36：`./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease`。
 - 设备测试：`ANDROID_SERIAL=SERIAL ./gradlew :app:connectedDebugAndroidTest`；所有 ADB 命令指定 `-s SERIAL`。
 - 完整 DPM 协调测试在独立模拟器显式传入 `policyTarget`；实机单包探针须显式传入 `physicalPolicyTarget`，仅测试无既有管控的非黑名单包并在 finally 恢复；不得自动清除实机账户/数据、恢复出厂设置或退管。
-- 不与 instrumentation 同时运行外部 uiautomator；两者会争用 UiAutomation。
+- 不与 instrumentation 同时运行外部 uiautomator；两者会争用 UiAutomation。UI dump失败时不得读取旧XML继续操作。
 - BackgroundBoundaryProbeTest 仅接受显式 UUID、arm/cleanup 模式和配置版本；只处理空配置或既有授权临时夹具。arm 后退出 instrumentation 再观察真实后台闹钟，完成后 cleanup；清理必须复核版本和夹具，保留管理员后续修改。
 - ColorOS 实测需同时授权精确闹钟、允许后台行为及开机/后台自启动；授权不代表准点，必须记录实际边界时间。
 - 验证证据更新 docs/device-validation.md；OPPO 已取得 DO；注册成功不能代替目标应用、通知、启动入口及开机等实际效果验证。
@@ -29,3 +29,6 @@
 - 事件监听受 DO 系统绑定；执行服务使用 systemExempted，执行结束即停止，不轮询。
 - ManagerViewModel 统一授权；离开/锁屏清会话和日志。IO 提交时捕获认证 generation 并传入操作，不能仅丢弃过期 UI 回填。
 - 密码存储、闹钟和服务启动失败须记录权限异常并展示；损坏日志行跳过时显示提示。
+
+- 时间表草稿用分钟整数；系统24小时时分选择器取消不修改草稿，随页面销毁释放，保留起止相等校验。
+- 清空密码仅在当前会话/generation有效时通过SAF删除单个 password.json并复查缺失；不改管控配置或目录授权，删除尝试后清会话，失败不可报成功。禁止用实机管理员密码文件做自动化删除测试。
