@@ -61,7 +61,6 @@ import java.time.LocalDate
         Text(title,style=MaterialTheme.typography.titleLarge)
         OutlinedTextField(pin,{pin=it.filter { c->c in '0'..'9' }},label={Text("密码")},singleLine=true,visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),modifier=Modifier.fillMaxWidth())
         if(confirm) OutlinedTextField(repeated,{repeated=it.filter { c->c in '0'..'9' }},label={Text("再次输入密码")},singleLine=true,visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),modifier=Modifier.fillMaxWidth())
-        if(!confirm) Text("首次使用或确认密码文件被删除后，输入 0000 并设置新密码。")
         Button(onClick={onSubmit(pin,repeated);pin="";repeated=""},enabled=!busy && pin.isNotEmpty() && (!confirm || repeated.isNotEmpty())) { Text(if(confirm) "保存新密码" else "登录") }
     }
 }
