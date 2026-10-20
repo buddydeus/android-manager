@@ -40,7 +40,11 @@
 
 ### 实机重启核验
 
-重启前复核：配置版本7、初始化完成、总开关开启、黑名单为空、七天周表为空、无待执行边界，系统 boot count 为21。已执行正常重启；随后 macOS 仍枚举 OPPO USB，ADB 列表为空，重启电脑端 native ADB 服务后仍未恢复。正在等待管理员解锁/确认 USB 调试，**尚不能宣称本次实机开机恢复通过**。
+重启前复核：配置版本7、初始化完成、总开关开启、黑名单为空、七天周表为空、无待执行边界，系统 boot count 为21。正常重启后曾只枚举 MIDI 接口，ADB 列表为空；管理员解锁并重新开启 USB 调试、重新连接后恢复，无需重新注册 Device Owner。
+
+未重新打开管理界面，读取到 boot count=22，`lastPolicyBoot=22 / lastCleanupBoot=22`，时间策略启用，系统事件服务 `[bound] [connected]`；配置版本仍为7，黑名单与周表仍为空，无待执行边界，小红书未隐藏也未暂停，AndroidRuntime 无应用崩溃。**本次空规则、总开关开启的实机重启恢复通过**；不据此宣称已验证非空黑名单在首次解锁前恢复。
+
+已卸载临时 `com.buddydeus.androidmanager.test` 测试 APK；正式应用及 DO 身份保留。DP 文件夹仅余正式 state、marker 和 logs，无边界探针标记；强制待机已退出为 ACTIVE。
 
 ## 独立模拟器
 
