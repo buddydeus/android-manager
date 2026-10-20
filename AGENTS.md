@@ -10,9 +10,9 @@
 
 - JDK21、SDK36：`./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease`。
 - 设备测试：`ANDROID_SERIAL=SERIAL ./gradlew :app:connectedDebugAndroidTest`；所有 ADB 命令指定 `-s SERIAL`。
-- 实际 DPM 测试只在独立模拟器显式传入 `policyTarget`；不得自动清除实机账户/数据、恢复出厂设置或退管。
+- 完整 DPM 协调测试在独立模拟器显式传入 `policyTarget`；实机单包探针须显式传入 `physicalPolicyTarget`，仅测试无既有管控的非黑名单包并在 finally 恢复；不得自动清除实机账户/数据、恢复出厂设置或退管。
 - 不与 instrumentation 同时运行外部 uiautomator；两者会争用 UiAutomation。
-- 验证证据更新 docs/device-validation.md；OPPO 仍被账户阻挡 DO 注册，不能宣称实机管控通过。
+- 验证证据更新 docs/device-validation.md；OPPO 已取得 DO；注册成功不能代替目标应用、通知、启动入口及开机等实际效果验证。
 
 ## 实现边界
 

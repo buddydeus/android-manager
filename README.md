@@ -22,7 +22,7 @@ adb -s SERIAL shell am start -W -n com.buddydeus.androidmanager/.ui.MainActivity
 
 调试 APK：`app/build/outputs/apk/debug/app-debug.apk`。Release 输出为未签名 APK，`debuggable=false`，正式分发前需使用管理员自己的签名配置。
 
-设备基础测试：`ANDROID_SERIAL=SERIAL ./gradlew :app:connectedDebugAndroidTest`。测试中的实际策略用例只在明确指定 `policyTarget` 的独立模拟器运行；实机不会自动选择应用进行暂停或隐藏。
+设备基础测试：`ANDROID_SERIAL=SERIAL ./gradlew :app:connectedDebugAndroidTest`。测试中的完整协调策略用例只在明确指定 `policyTarget` 的独立模拟器运行。实机探针须显式传入 `physicalPolicyTarget`，拒绝受保护、已在黑名单或已有外部限制的应用；探针结束解除自身限制，不修改生产配置和时间策略。普通测试不自动选择应用施加策略。
 
 ## 部署与使用
 
@@ -42,4 +42,4 @@ adb -s SERIAL shell dpm set-device-owner com.buddydeus.androidmanager/.platform.
 
 35 项单元测试、Lint、Debug 和 Release 构建通过。OPPO PKD130 / Android 15 的五项基础 instrumentation 通过；实际 Device Owner 用例因未取得管理身份跳过。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化与重启应用登录检查。
 
-OPPO 当前仍有账户，Device Owner 注册被拒绝；系统市场、通知、已打开应用、锁屏开机及 Doze 等实机验收尚未完成。USB 调试连接正常，连接通过不等于管控验收通过。
+OPPO 账户已由管理员移除，重新安装 APK 后 Device Owner 注册成功；实机小红书暂停、隐藏及恢复探针通过；系统市场可暂停，但 ColorOS 明确禁止隐藏，因此市场完整效果未通过。通知、锁屏开机、实际边界及 Doze 等验收继续进行。USB 调试连接正常，连接通过不等于管控验收通过。

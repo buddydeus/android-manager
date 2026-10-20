@@ -8,15 +8,23 @@
 | --- | --- |
 | USB、ADB 授权 | 通过，状态 device；当前可持续执行调试命令 |
 | Shell、push/pull | 通过，独立临时文件往返内容一致，已删除 |
-| Device Owner | 未取得；设备仍有1个账户，注册被系统拒绝，等待管理员自行移除 |
+| Device Owner | 已取得；管理员移除账户后复核为0个账户，重新安装 APK，正常注册成功 |
 | 最终 Debug APK 安装与启动 | 通过；启动返回 Status: ok，未发现应用 AndroidRuntime 崩溃 |
 | instrumentation | 5项通过、1项按条件跳过：DP状态损坏处理、真实应用目录与保护、初始化入口隔离、SAF错误查询、SAF确认文件缺失 |
-| 初始管理入口 | 正确停留在 Device Owner 初始化引导；未初始化不施加策略 |
-| 系统市场、通知、已打开应用 | 未验证；依赖 Device Owner 注册和目标 ROM |
+| 初始管理入口 | 未初始化不施加策略；管理员已授权本地密码目录、完成默认密码验证与首次改密 |
+| 系统市场 | 暂停成功、隐藏被 ROM 拒绝；完整暂停+隐藏探针失败，已恢复原状态 |
+| 小红书对照探针 | 暂停、隐藏、保留隐藏目录记录及解除恢复通过；未修改生产黑名单或周表 |
+| 通知、已打开应用 | 市场前台任务在暂停时结束；通知实机展示仍待验证 |
 | 锁屏开机、Doze、真实时段边界 | 未验证；依赖完整部署 |
-| 本机密码目录及恢复 | 尚未完成实机验收 |
+| 本机密码目录及恢复 | 本地目录授权及首次改密通过；删除和异常恢复尚未在实机验收 |
 
 连接期间 libusb 出现读取错误并断开；使用当前服务临时环境 `ADB_LIBUSB=0 adb start-server`，手机重开 USB 调试并重新连接后恢复。未修改主机持久设置，未移除手机账户、清除数据或恢复出厂设置。
+
+实机初始化后复核：`auto_time=1`、`auto_time_zone=0`、`persist.sys.timezone=Asia/Shanghai`，DPM 和用户限制均包含本应用施加的 `no_config_date_time`。
+
+系统市场失败证据：`OplusForbidHideOrDisableManager: Cannot hiding protect app com.heytap.market`；DPM `setApplicationHidden` 返回 false。不得将其记录为隐藏成功，也不通过其他手段绕过 ROM 保护。相同显式单包探针在 `com.xingin.xhs` 通过（1项），两次探针后均确认 `hidden=false / suspended=false`。
+
+此前账户阻挡解除后，首次重试发现目标包当前不存在，系统报 Invalid component；重新安装已验证 APK 后注册成功。未通过清除数据或恢复出厂处理。
 
 ## 独立模拟器
 
@@ -40,5 +48,5 @@
 ```text
 构建 / 单元测试 / 基础实机测试 → 已通过
 独立模拟器实际 DPM 调用       → 已通过
-OPPO 完整管控验收            → 等待管理员处理账户后继续
+OPPO 完整管控验收            → 已取得 DO 并完成初始化，继续逐项验证
 ```
