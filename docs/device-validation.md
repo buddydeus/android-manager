@@ -99,3 +99,8 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 最终全套界面测试在约375dp宽度、系统动画scale=0下通过；双倍字体与横屏截图人工查看。8张实际截图保存在 `designs/validation/minimal/`；模拟器density从460恢复为原420，动画scale原先即为0。
 - Gradle测试结束尝试卸载模拟器目标包时被既有Device Owner身份拒绝，未退管或清数据；测试结果为13通过/0失败/0跳过。测试APK与业务APK的清理不影响上述断言。
 - 本轮未安装到OPPO，也未操作实机管理员密码或规则；TalkBack人工、新版实机UI及ROM闹钟准点验收仍未进行。
+
+## 简洁界面实机部署（2026-10-20）
+
+- 代码提交065a2eb对应的Debug APK覆盖安装至OPPO PKD130，`adb install -r`返回Success；MainActivity启动返回Status: ok（WARM，1099ms）。
+- 本轮仅确认安装与启动；未执行实机密码操作、规则修改或新版界面逐页验收。
