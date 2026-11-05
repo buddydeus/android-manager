@@ -18,6 +18,8 @@ object StateCodec {
         }) } })
         put("ownTimeRestriction",s.ownTimeRestriction);put("timePending",s.timePending);put("timeResult",s.timeResult)
         put("lastEvaluation",s.lastEvaluation);put("alarmStatus",s.alarmStatus);put("lastCleanupBoot",s.lastCleanupBoot);put("lastPolicyBoot",s.lastPolicyBoot)
+        put("lastEvaluationRevision",s.lastEvaluationRevision)
+        put("remote",s.remote?.let { RemoteCodec.stamp(it).put("serverRevision",it.serverRevision).put("pending",it.pending) } ?: JSONObject.NULL)
     }.toString()
     fun decode(text: String): ManagerState {
         val j=JSONObject(text);require(j.getInt("schemaVersion")==1) { "不支持的状态格式" }
@@ -31,6 +33,8 @@ object StateCodec {
             records=records.keys().asSequence().associateWith { k -> records.getJSONObject(k).let { r -> PolicyRecord(r.getBoolean("ownSuspended"),r.getBoolean("ownHidden"),r.getString("pending"),r.getString("result"),r.getString("error"),r.getString("operationId"),r.getLong("revision"),r.getLong("instance"),if(r.isNull("baselineSuspended")) null else r.getBoolean("baselineSuspended"),if(r.isNull("baselineHidden")) null else r.getBoolean("baselineHidden"),r.optBoolean("unknownSuspended",false),r.optBoolean("unknownHidden",false)) } },
             ownTimeRestriction=j.getBoolean("ownTimeRestriction"),timePending=j.getBoolean("timePending"),timeResult=j.getString("timeResult"),
             lastEvaluation=j.getString("lastEvaluation"),alarmStatus=j.getString("alarmStatus"),lastCleanupBoot=j.getInt("lastCleanupBoot"),lastPolicyBoot=j.getInt("lastPolicyBoot"),
+            remote=if(!j.has("remote") || j.isNull("remote")) null else j.getJSONObject("remote").let { RemoteCodec.readStamp(it).copy(serverRevision=it.getLong("serverRevision"),pending=it.getBoolean("pending")) },
+            lastEvaluationRevision=j.optLong("lastEvaluationRevision",-1),
         )
     }
 }

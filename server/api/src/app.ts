@@ -8,6 +8,8 @@ import type { Context } from './device.ts';
 import cookie from '@fastify/cookie';
 import { authRoutes } from './auth.ts';
 import { adminRoutes } from './admin.ts';
+import websocket from '@fastify/websocket';
+import { RealtimeHub } from './realtime.ts';
 
 export interface AppOptions { directory: string; enrollmentKey: string; origin: string; now?: () => number }
 export async function createApp(options: AppOptions): Promise<FastifyInstance> {
@@ -16,6 +18,10 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   const store = new Store(options.directory);
   const ctx: Context = { store, now: options.now ?? Date.now, enrollmentHash: digest(options.enrollmentKey), origin: options.origin, notify: () => false, disconnect: () => {} };
   await app.register(cookie);
+  await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
+  ctx.realtime = new RealtimeHub(app, ctx);
+  ctx.notify = (id, message) => ctx.realtime?.send(id, message) ?? false;
+  ctx.disconnect = id => { ctx.realtime?.disconnect(id); };
   app.addHook('onClose', () => { store.close(); });
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ApiError) return reply.code(error.status).send({ errorCode: error.code, message: error.message, requestId: request.id });

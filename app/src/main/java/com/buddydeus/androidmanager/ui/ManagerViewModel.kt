@@ -17,6 +17,7 @@ data class ManagerUiState(
     val screen:Screen=Screen.LOGIN,val busy:Boolean=false,val message:String="",val config:ManagerState?=null,
     val error:String="",val location:String="",val owner:Boolean=false,val logs:List<String> = emptyList(),
     val logsQuery:LogPageKey?=null,
+    val remote:RemoteStatus=RemoteStatus(),
 )
 class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
     private val mutable=MutableStateFlow(ManagerUiState())
@@ -26,6 +27,7 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
     init {
         viewModelScope.launch { graph.coordinator.snapshots.collect { s -> mutable.update { it.copy(config=s) } } }
         viewModelScope.launch { graph.coordinator.errors.collect { e -> mutable.update { it.copy(error=e) } } }
+        viewModelScope.launch { graph.remote.status.collect { s -> mutable.update { it.copy(remote=s) } } }
         refresh()
     }
     private fun post(epoch:Long,block:(ManagerUiState)->ManagerUiState) { mutable.update { if(epoch==generation.get()) block(it) else it } }

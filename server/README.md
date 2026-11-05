@@ -1,6 +1,6 @@
 # AMS 远程服务
 
-Node 24，Fastify + TypeScript + SQLite。需求与完整方案见 [远程管理扩展](../docs/DR-20261105-remote-management/requirement.md)。当前环节提供管理员会话、设备挑战注册和双向配置比较；推送、记录、安装包、网页及 Android 接入在后续环节完成。
+Node 24，Fastify + TypeScript + SQLite。需求与完整方案见 [远程管理扩展](../docs/DR-20261105-remote-management/requirement.md)。当前提供管理员会话、设备挑战注册、双向配置比较、WSS推送和设备状态上报，已接入Android端；使用记录、安装包和网页在后续环节完成。
 
 ```text
 设备接入凭据 → 一次性挑战及设备签名 → 独立设备 token → 配置同步
@@ -32,3 +32,5 @@ npm start
 管理员只初始化一次，命令不覆盖已有管理员。启动和构建不自动创建账号。Cookie 仅经 HTTPS 使用，不能用裸 HTTP 网页登录验证代替 TLS 部署。`/health/live` 和 `/health/ready` 分别检查服务存活及数据库可读。
 
 同步接口仅接受完整 `candidate`（变更ID、实际保存时间、时间质量、来源、三项配置）；相同时间保留服务器版本。重传旧候选会返回当前服务端快照。网页保存配置须携带稳定 UUID `x-mutation-id`；请求重试复用同一ID，新的保存操作才生成新ID。固定服务器地址不代替身份验证，注册凭据可从 APK 提取的边界仍适用。
+
+设备WSS端点 `/api/v1/device/channel` 通过 Authorization 验证后建立当前连接；30秒心跳、90秒失联判离线，服务重启不恢复旧在线状态。推送只通知配置有变；设备通过HTTPS双向同步取得当前结果。`/device/status` 上报版本及带配置版本的执行摘要，不能把连接在线当作管控成功。

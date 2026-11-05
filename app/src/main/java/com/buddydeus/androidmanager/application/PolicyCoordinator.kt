@@ -12,6 +12,7 @@ class PolicyCoordinator(
     private val audit:AuditSink,private val clock:Clock=Clock.systemUTC(),
     private val schedule:(Instant?)->String={"未配置调度器"},
     private val events:(Boolean)->Unit={},private val cleanup:(java.time.LocalDate)->Unit={},
+    private val syncTime:()->SyncTime={SyncTime(clock.millis(),"UNCALIBRATED")},
 ) {
     private val lock=Any()
     private val mutableState=MutableStateFlow<ManagerState?>(null)
@@ -27,7 +28,29 @@ class PolicyCoordinator(
     private fun log(e:AuditEvent) { try { audit.append(e) } catch(ex:Exception) { mutableError.value="日志写入失败" } }
     fun updateConfig(action:String,transform:(ManagerState)->ManagerState):ManagerState=synchronized(lock) {
         val before=store.read();val after=transform(before).copy(revision=before.revision+1)
-        save(after);log(AuditEvent(LogCategory.CONFIG_CHANGE,action,"已保存",revision=after.revision));after
+        val next=if(after.initialized && (before.remote==null || before.managedConfig()!=after.managedConfig())) {
+            val time=syncTime()
+            after.copy(remote=SyncStamp(UUID.randomUUID().toString(),time.atMs,time.quality,if(before.remote==null) "MIGRATED_BASELINE" else "LOCAL",before.remote?.serverRevision ?: 0))
+        } else after
+        save(next);log(AuditEvent(LogCategory.CONFIG_CHANGE,action,"已保存",revision=next.revision));next
+    }
+    fun syncState():ManagerState=synchronized(lock) {
+        val s=store.read();check(s.initialized) { "请先完成本机初始化" }
+        if(s.remote!=null) s else {
+            val time=syncTime()
+            save(s.copy(remote=SyncStamp(UUID.randomUUID().toString(),time.atMs,time.quality,"MIGRATED_BASELINE")))
+        }
+    }
+    fun acceptRemote(snapshot:RemoteSnapshot):Boolean=synchronized(lock) {
+        val s=store.read();check(s.initialized && policy.isOwner()) { "设备尚未具备远程管理能力" }
+        if(s.remote!=null && s.remote.modifiedAtMs>snapshot.stamp.modifiedAtMs) return@synchronized false
+        if(s.remote?.mutationId==snapshot.stamp.mutationId) check(s.managedConfig()==snapshot.config) { "相同配置编号内容不一致" }
+        val changed=s.managedConfig()!=snapshot.config
+        val next=s.copy(enabled=snapshot.config.enabled,blacklist=snapshot.config.blacklist,schedule=snapshot.config.schedule,
+            revision=s.revision+if(changed) 1 else 0,remote=snapshot.stamp.copy(pending=false))
+        if(next!=s) save(next)
+        if(changed) log(AuditEvent(LogCategory.CONFIG_CHANGE,"远程配置","已保存",revision=next.revision))
+        changed
     }
     fun reconcile(reason:String,bootId:Int?=null) = synchronized(lock) {
         try {
@@ -38,10 +61,10 @@ class PolicyCoordinator(
                 catch(e:Exception) { mutableError.value="过期日志清理失败";log(AuditEvent(LogCategory.PERMISSION_ERROR,"清理过期日志","失败")) }
             }
             if(!s.initialized) { schedule(null);events(false);mutableState.value=s;return@synchronized }
-            events(s.enabled)
+            events(true)
             if(bootId!=null && !s.enabled && bootId>=0 && s.lastPolicyBoot==bootId) { schedule(null);mutableState.value=s;return@synchronized }
             if(!policy.isOwner()) {
-                s=save(s.copy(lastEvaluation="执行失败：未取得 Device Owner",alarmStatus=schedule(null)))
+                s=save(s.copy(lastEvaluation="执行失败：未取得 Device Owner",lastEvaluationRevision=s.revision,alarmStatus=schedule(null)))
                 log(AuditEvent(LogCategory.PERMISSION_ERROR,"管理身份","未取得 Device Owner",revision=s.revision));return@synchronized
             }
             // A boundary crossed during a batch is evaluated again before the service stops.
@@ -75,7 +98,7 @@ class PolicyCoordinator(
                 if(alarm.startsWith("定时执行不可用") && alarm!=s.alarmStatus) log(AuditEvent(LogCategory.PERMISSION_ERROR,"边界调度",alarm,revision=s.revision))
                 val failures=s.records.values.count { it.result in setOf("FAILED","UNKNOWN","PARTIAL") }
                 val summary=if(apps.values.any { it.updating && it.packageName in s.blacklist }) "部分应用正在更新，尚未完成核验" else if(failures==0 && tr.complete) if(s.enabled) "已核验当前策略" else "已关闭并解除本软件限制" else "存在执行异常，请查看逐项结果"
-                s=save(s.copy(alarmStatus=alarm,lastEvaluation=summary,lastPolicyBoot=bootId ?: s.lastPolicyBoot))
+                s=save(s.copy(alarmStatus=alarm,lastEvaluation=summary,lastEvaluationRevision=s.revision,lastPolicyBoot=bootId ?: s.lastPolicyBoot))
             } while(s.enabled && ScheduleEvaluator.evaluate(s.schedule,clock.instant()).active != time.active)
         } catch(e:Exception) {
             mutableError.value=e.message ?: "策略执行失败"

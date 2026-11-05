@@ -25,6 +25,8 @@ data class ManagerState(
     val records: Map<String, PolicyRecord> = emptyMap(), val ownTimeRestriction: Boolean = false,
     val timePending: Boolean = false, val timeResult: String = "", val lastEvaluation: String = "尚未执行",
     val alarmStatus: String = "未安排", val lastCleanupBoot: Int = -1, val lastPolicyBoot: Int = -1,
+    val remote: SyncStamp? = null,
+    val lastEvaluationRevision:Long=-1,
 ) { init { require(schemaVersion == 1 && schedule.size == 7 && revision >= 0) } }
 interface StateStore { fun read(): ManagerState; fun write(state: ManagerState) }
 fun interface AuditSink { fun append(event: AuditEvent) }

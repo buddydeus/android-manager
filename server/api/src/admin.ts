@@ -17,9 +17,9 @@ export function adminRoutes(app: FastifyInstance, ctx: Context): void {
     requireAdmin(ctx, request);
     const query = z.object({ page: z.coerce.number().int().min(1).max(100_000).default(1), limit: z.coerce.number().int().min(1).max(100).default(50) }).parse(request.query);
     const total = z.object({ total: z.number() }).parse(ctx.store.db.prepare('SELECT count(*) AS total FROM devices').get()).total;
-    return { data: ctx.store.list('devices', deviceSchema, undefined, query.limit, (query.page - 1) * query.limit), total, ...query };
+    return { data: ctx.store.list('devices', deviceSchema, undefined, query.limit, (query.page - 1) * query.limit).map(device => ({ ...device, online: !!ctx.realtime?.info(device.id) })), total, ...query };
   });
-  app.get('/api/v1/admin/devices/:id', request => { requireAdmin(ctx, request); return { data: targetDevice(ctx, request) }; });
+  app.get('/api/v1/admin/devices/:id', request => { requireAdmin(ctx, request); const device = targetDevice(ctx, request); return { data: { ...device, online: !!ctx.realtime?.info(device.id) } }; });
   app.get('/api/v1/admin/devices/:id/config', request => {
     requireAdmin(ctx, request); const device = targetDevice(ctx, request);
     return { data: ctx.store.get('device_configs', device.id, currentSchema) };

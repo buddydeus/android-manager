@@ -18,11 +18,13 @@ class ManagerGraph private constructor(val context:Context) {
     val policy=DevicePolicyGateway(context)
     val catalog=AppCatalog(context)
     val scheduler=BoundaryScheduler(deviceContext)
+    val syncClock=SyncClockRepository(deviceContext.filesDir,::bootCount)
     val coordinator=PolicyCoordinator(store,catalog,policy,audit,schedule=scheduler::schedule,events={ enabled ->
         val component=ComponentName(context,ManagerEventService::class.java)
         val wanted=if(enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
         if(context.packageManager.getComponentEnabledSetting(component)!=wanted) context.packageManager.setComponentEnabledSetting(component,wanted,PackageManager.DONT_KILL_APP)
-    },cleanup=audit::cleanup)
+    },cleanup=audit::cleanup,syncTime=syncClock::now)
+    val remote:RemoteManager by lazy { RemoteManager(context,coordinator,syncClock,policy::isOwner,::bootCount,audit) { request("远程配置") } }
     val credentials:Credentials by lazy {
         check(context.getSystemService(UserManager::class.java).isUserUnlocked) { "请先解锁手机" }
         Credentials(context,audit)

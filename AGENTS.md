@@ -11,6 +11,7 @@
 
 - server 使用 Node24；在 server/ 运行 `npm test && npm run typecheck && npm run build`。npm锁文件固定依赖；SQLite仅单实例本机卷，未知存储版本禁止清库恢复。凭据、签名和本地数据不入库。
 - 远程扩展分环节实施；README 说明实际接入状态，不以 API 通过声称 Android 或实机能力完成。自动注册必须完成既有初始化；设备 token 与网页管理员会话隔离；配置只同步黑名单、周表和总开关。
+- Android 用原子状态同时保存同步字段与待上传元数据；重连先比较本机候选，旧响应不得清除新修改。策略回执携带实际执行版本，不将旧成功标记为新配置结果。服务端在线判定用当前WSS会话及心跳，重启后重新建立。
 
 - JDK21、SDK36：`./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease`。
 - ManagerInterfaceTest仅在模拟器使用独立Compose宿主、固定数据与回调验证UI，不访问ManagerGraph、SAF或DPM；不要用实机配置做界面夹具。
@@ -31,7 +32,7 @@
 - PolicyCoordinator 是配置和系统变更唯一串行入口：先持久意图、后调用、再保存回执。不得通过隐藏绕过暂停拒绝。
 - 暂停和隐藏的未知归属独立保存；单步失败不可被后续成功覆盖，已知归属的另一维仍应解除。
 - 重装按当前 instance 重建回执；EXTRA_REPLACING 中间状态保留策略，不视为真卸载。
-- 事件监听受 DO 系统绑定；执行服务使用 systemExempted，执行结束即停止，不轮询。
+- 初始化后的事件服务受 DO 系统绑定，远程连接不随管控总开关停用；心跳仅检查连接，不轮询应用启动或时间规则。执行服务使用 systemExempted，执行结束即停止。
 - ManagerViewModel 统一授权；离开/锁屏清会话和日志。IO 提交时捕获认证 generation 并传入操作，不能仅丢弃过期 UI 回填。
 - 密码存储、闹钟和服务启动失败须记录权限异常并展示；损坏日志行跳过时显示提示。
 

@@ -279,6 +279,15 @@ internal fun timeText(minute: Int) = "%02d:%02d".format(java.util.Locale.ROOT, m
 @Composable internal fun SettingsScreen(state: ManagerUiState, actions: ManagerActions) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Section {
+            Text("远程管理", style = MaterialTheme.typography.titleLarge)
+            StatusRow("服务器", com.buddydeus.androidmanager.BuildConfig.AMS_SERVER_ORIGIN)
+            StatusRow("连接",state.remote.phase,state.remote.error.isNotBlank())
+            StatusRow("设备ID",state.remote.deviceId.ifBlank { "首次接入后显示" })
+            state.remote.lastSyncAt?.let { StatusRow("最近同步",java.time.Instant.ofEpochMilli(it).atZone(ScheduleEvaluator.zone).toLocalDateTime().toString().replace('T',' ')) }
+            if(state.remote.error.isNotBlank()) SupportingText(state.remote.error)
+            SupportingText("远程管理和使用统计独立于管控总开关。")
+        }
+        Section {
             Text("权限", style = MaterialTheme.typography.titleLarge)
             StatusRow("精确闹钟", state.config?.alarmStatus ?: "尚无执行结果", state.config?.alarmStatus?.startsWith("定时执行不可用") == true)
             SecondaryAction("检查精确闹钟授权", !state.busy, onClick = actions.checkAlarms)

@@ -4,11 +4,13 @@ import { z } from 'zod';
 import { ApiError, candidateSchema, currentSchema, challengeInput, registerSchema, deviceSchema } from '../../contracts/index.ts';
 import type { Device, CurrentConfig } from '../../contracts/index.ts';
 import type { Store } from './db.ts';
+import type { RealtimeHub } from './realtime.ts';
 
 export interface Context {
   store: Store; now: () => number; enrollmentHash: string; origin: string;
   notify: (deviceId: string, message: unknown) => boolean;
   disconnect: (deviceId: string) => void;
+  realtime?: RealtimeHub;
 }
 export function digest(value: string): string { return createHash('sha256').update(value).digest('hex'); }
 export function secretEquals(value: string, expectedHash: string): boolean { return timingSafeEqual(Buffer.from(digest(value), 'hex'), Buffer.from(expectedHash, 'hex')); }
@@ -77,6 +79,15 @@ export function deviceRoutes(app: FastifyInstance, ctx: Context): void {
   });
   app.post('/api/v1/device/register', request => { requireEnrollment(ctx, request); return { data: enroll(ctx, registerSchema.parse(request.body)) }; });
   app.get('/api/v1/device/time', request => { requireDevice(ctx, request); return { data: { nowMs: ctx.now() } }; });
+  app.post('/api/v1/device/status', request => {
+    const device = requireDevice(ctx, request);
+    const input = z.object({
+      versionCode: z.int().positive(), versionName: z.string().max(100), apiLevel: z.int().min(30).max(100), bootId: z.int().min(-1),
+      status: z.object({ configMutationId: z.uuid().nullable(), configRevision: z.int().nonnegative(), policyRevision: z.int().min(-1).default(-1), policyResult: z.string().max(2000), alarmStatus: z.string().max(2000) }).strict(),
+    }).strict().parse(request.body);
+    ctx.store.put('devices', device.id, device.id, { ...device, versionCode: input.versionCode, versionName: input.versionName, apiLevel: input.apiLevel, lastSeenAt: ctx.now(), status: { ...input.status, bootId: input.bootId } });
+    return { data: { accepted: true } };
+  });
   app.post('/api/v1/device/sync', request => {
     const device = requireDevice(ctx, request);
     const input = z.object({ candidate: candidateSchema.nullish() }).strict().parse(request.body);

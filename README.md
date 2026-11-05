@@ -13,7 +13,9 @@ Android 11+ Device Owner 应用。既有本机需求见 [requirement](docs/requi
 
 ## 构建与调试
 
-远程服务位于 [server](server/README.md)，使用 Node 24。当前已接入自动注册鉴权、管理员会话和按保存时间整份比较的配置 API；Android 联网、统计、升级及远程重启尚在实施。服务端验证：在 `server/` 执行 `npm ci && npm test && npm run typecheck && npm run build`。生产值通过环境注入，勿将接入凭据、管理员密码或签名私钥提交仓库。
+远程服务位于 [server](server/README.md)，使用 Node 24。当前接入设备自动注册、管理员会话、Android 双向配置同步、WSS 推送与状态上报；统计、升级、远程重启及网页仍在实施，当前不表示设备联调已通过。服务端验证：在 `server/` 执行 `npm ci && npm test && npm run typecheck && npm run build`。生产值通过环境注入，勿将接入凭据、管理员密码或签名私钥提交仓库。
+
+远程接入在本机初始化完成后启动，独立于本机登录和管控总开关。受控 APK 构建前设置 `AMS_ENROLLMENT_KEY`，与服务端接入凭据一致；缺少凭据时显示待同步，本地管控继续。服务器固定为 `https://ams.opt.work`，仅 debug 构建可用 `AMS_TEST_ORIGIN` 指定隔离 HTTPS 测试原点。设置页显示连接与同步状态，不提供更换地址或解绑入口。
 
 使用 JDK 21、Android SDK 36；设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
 
@@ -54,6 +56,6 @@ adb -s SERIAL shell dpm set-device-owner com.buddydeus.androidmanager/.platform.
 
 ## 验证状态
 
-42 项单元测试、13 项模拟器界面测试、Lint、Debug 和 Release 构建通过。简洁界面实际截图见 [界面验证](designs/validation/minimal/)。OPPO PKD130 / Android 15 已完成基础存储、应用目录、初始化入口与 SAF 查询验证，以及显式应用和后台边界探针。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化、恢复及重启应用登录检查。
+本轮52项单元测试、Lint、Debug和Release构建通过；既有13项模拟器界面测试尚待本轮重跑。远程设备联调仍待执行。简洁界面实际截图见 [界面验证](designs/validation/minimal/)。OPPO PKD130 / Android 15 已完成基础存储、应用目录、初始化入口与 SAF 查询验证，以及显式应用和后台边界探针。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化、恢复及重启应用登录检查。
 
 OPPO 账户已由管理员移除，重新安装 APK 后 Device Owner 注册成功；实机小红书暂停、隐藏及恢复探针通过；系统市场可暂停，但 ColorOS 明确禁止隐藏，因此市场完整效果未通过。锁屏深度待机下可自动解除，但实测比边界晚约118秒，即时性不通过。通知展示等验收仍未完成，不能宣称此 ROM 完整兼容。临时黑名单和周表已清空，小红书恢复可用，总开关保留开启。实机空规则、开启状态的重启恢复通过；USB 连接通过不等于管控验收通过。

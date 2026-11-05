@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!-- Device Owner requires visibility of launchable, hidden, and remembered managed packages. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
@@ -7,7 +9,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <application android:label="应用管控" android:theme="@style/AppTheme" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:icon="@drawable/ic_manager" android:supportsRtl="true">
+    <application android:label="应用管控" android:theme="@style/AppTheme" android:allowBackup="false" android:usesCleartextTraffic="false" android:dataExtractionRules="@xml/data_extraction_rules" android:icon="@drawable/ic_manager" android:supportsRtl="true">
         <receiver android:name=".platform.ManagerAdminReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true" android:directBootAware="true">
             <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin"/>
             <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/></intent-filter>

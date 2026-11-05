@@ -5,6 +5,49 @@ import org.junit.Test
 import java.time.*
 
 class PolicyCoordinatorTest {
+    @Test fun policyReceiptCarriesTheActuallyEvaluatedRevision() {
+        val s=Store(active().copy(revision=9))
+        coordinator(s,Port()).reconcile("revision")
+        val json=org.json.JSONObject(com.buddydeus.androidmanager.data.StateCodec.encode(s.state))
+        assertEquals(9L,json.optLong("lastEvaluationRevision",-1))
+    }
+    private fun stamp(time:Long,pending:Boolean=true)=SyncStamp(java.util.UUID.randomUUID().toString(),time,"CALIBRATED","LOCAL",1,pending)
+    @Test fun equalTimeServerSnapshotWinsAndPreservesDeviceReceipts() {
+        val receipt=PolicyRecord(ownHidden=true,instance=9)
+        val s=Store(active().copy(remote=stamp(1000),records=mapOf("test.app" to receipt)))
+        val snapshot=RemoteSnapshot(stamp(1000),ManagedConfig(false,emptySet(),List(7){null}))
+        assertTrue(coordinator(s,Port()).acceptRemote(snapshot))
+        assertFalse(s.state.enabled);assertTrue(s.state.initialized)
+        assertEquals(receipt,s.state.records["test.app"]);assertFalse(s.state.remote!!.pending)
+    }
+    @Test fun staleResponseCannotClearNewerLocalPendingConfiguration() {
+        val s=Store(active().copy(remote=stamp(2000)))
+        coordinator(s,Port()).acceptRemote(RemoteSnapshot(stamp(1000),ManagedConfig(false,emptySet(),List(7){null})))
+        assertTrue(s.state.enabled);assertTrue(s.state.remote!!.pending)
+        assertEquals(2000L,s.state.remote!!.modifiedAtMs)
+    }
+    @Test fun matchingServerEchoClearsPendingWithoutChangingLocalRevision() {
+        val s=Store(active().copy(revision=8,remote=stamp(1000)))
+        val snapshot=RemoteSnapshot(s.state.remote!!.copy(serverRevision=3),s.state.managedConfig())
+        assertFalse(coordinator(s,Port()).acceptRemote(snapshot))
+        assertFalse(s.state.remote!!.pending);assertEquals(3L,s.state.remote!!.serverRevision)
+        assertEquals(8L,s.state.revision)
+        coordinator(s,Port()).acceptRemote(snapshot)
+        assertEquals(8L,s.state.revision)
+    }
+    @Test fun initializedDisabledDeviceKeepsRemoteEventService() {
+        val s=Store(ManagerState(initialized=true,enabled=false));val p=Port()
+        var listening=false
+        PolicyCoordinator(s,catalog,p,AuditSink{},events={listening=it}).reconcile("disabled")
+        assertTrue(listening)
+    }
+    @Test fun localConfigurationSavesSyncIntentAtomically() {
+        val s=Store(ManagerState(initialized=true));val p=Port()
+        coordinator(s,p).updateConfig("local") { it.copy(enabled=false) }
+        val json=org.json.JSONObject(com.buddydeus.androidmanager.data.StateCodec.encode(s.state))
+        assertNotNull(json.optJSONObject("remote"))
+        assertTrue(json.getJSONObject("remote").getBoolean("pending"))
+    }
     private class Store(var state:ManagerState):StateStore {
         var failIntent=false
         override fun read()=state
