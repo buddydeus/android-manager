@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false, "rewriteRelativeImportExtensions": true,
+    "outDir": "dist", "rootDir": ".", "sourceMap": true
+  },
+  "include": ["api/src/**/*.ts", "contracts/**/*.ts"],
+  "exclude": ["tests"]
+}

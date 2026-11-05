@@ -1,6 +1,6 @@
 # Android 应用管控
 
-Android 11+ 单机 Device Owner 应用。需求见 [requirement](docs/requirement.md)，技术契约见 [proposal](docs/proposal.md)，设备验证见 [device-validation](docs/device-validation.md)。
+Android 11+ Device Owner 应用。既有本机需求见 [requirement](docs/requirement.md)，技术契约见 [proposal](docs/proposal.md)，设备验证见 [device-validation](docs/device-validation.md)。已批准的[远程管理扩展](docs/DR-20261105-remote-management/requirement.md)与[技术方案](docs/DR-20261105-remote-management/proposal.md)正在分环节实现，不表示已部署服务器或完成设备验收。
 
 ```text
 管理入口 → 密码验证 → 黑名单 / 共用周时间表 / 总开关 / 设置 / 分类日志
@@ -12,6 +12,8 @@ Android 11+ 单机 Device Owner 应用。需求见 [requirement](docs/requiremen
 界面采用白底蓝色的简洁布局，底部固定五项导航；规范与六页设计预览见 [界面规范](designs/specs/android-manager-minimal.md)。时间表以24小时细轨道辅助显示时段，保存按钮固定在导航上方；未保存草稿在切页、无关状态刷新及配置重建后保留，退出管理前提示丢弃。
 
 ## 构建与调试
+
+远程服务位于 [server](server/README.md)，使用 Node 24。当前已接入自动注册鉴权、管理员会话和按保存时间整份比较的配置 API；Android 联网、统计、升级及远程重启尚在实施。服务端验证：在 `server/` 执行 `npm ci && npm test && npm run typecheck && npm run build`。生产值通过环境注入，勿将接入凭据、管理员密码或签名私钥提交仓库。
 
 使用 JDK 21、Android SDK 36；设置 `JAVA_HOME`、`ANDROID_HOME` 后执行：
 

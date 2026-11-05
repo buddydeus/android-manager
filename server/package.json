@@ -1,0 +1,31 @@
+{
+  "name": "android-manager-server",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build:api": "tsc -p tsconfig.api.json",
+    "build": "npm run build:api",
+    "start": "node dist/api/src/main.js",
+    "admin": "node api/src/admin-cli.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.5",
+    "@fastify/multipart": "10.1.7",
+    "@fastify/static": "10.1.10",
+    "@fastify/websocket": "11.3.7",
+    "better-sqlite3": "13.0.3",
+    "fastify": "5.12.8",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.19.2",
+    "@types/ws": "8.18.2",
+    "typescript": "7.0.2"
+  }
+}

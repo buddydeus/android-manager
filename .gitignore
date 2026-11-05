@@ -8,3 +8,9 @@ docs/superpowers
 **/build/
 local.properties
 *.swp
+
+/server/node_modules/
+/server/dist/
+/server/data/
+/server/.env
+/server/.env.local

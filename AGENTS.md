@@ -4,10 +4,13 @@
 - 不自动建分支；每个完成环节验证后提交，显式暂存本环节文件。
 - 代码/脚本变化同步更新 README.md 和本文件，删除过时说明。
 - 界面设计SSOT：designs/specs/android-manager-minimal.md（已确认）；预览与提示词必须配对，主题token集中于ManagerTheme，功能语义仍以需求和技术契约为准。
-- 需求事实来源：docs/requirement.md；技术契约：docs/proposal.md；术语：GLOSSARY.md。
+- 本机需求：docs/requirement.md；本机技术契约：docs/proposal.md；远程扩展按 docs/DR-20261105-remote-management/{requirement,proposal}.md，受影响规则以已批准扩展为准；术语：GLOSSARY.md。
 - 不擅自撤回用户改动；.gitignore 和实施计划属于任务前置资料。
 
 ## 验证命令
+
+- server 使用 Node24；在 server/ 运行 `npm test && npm run typecheck && npm run build`。npm锁文件固定依赖；SQLite仅单实例本机卷，未知存储版本禁止清库恢复。凭据、签名和本地数据不入库。
+- 远程扩展分环节实施；README 说明实际接入状态，不以 API 通过声称 Android 或实机能力完成。自动注册必须完成既有初始化；设备 token 与网页管理员会话隔离；配置只同步黑名单、周表和总开关。
 
 - JDK21、SDK36：`./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease`。
 - ManagerInterfaceTest仅在模拟器使用独立Compose宿主、固定数据与回调验证UI，不访问ManagerGraph、SAF或DPM；不要用实机配置做界面夹具。
