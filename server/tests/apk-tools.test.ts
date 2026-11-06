@@ -1,0 +1,20 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { fixture } from './fixture.ts';
+import { randomUUID } from 'node:crypto';
+const apk = process.env.AMS_TEST_APK; const tools = process.env.AMS_TEST_BUILD_TOOLS;
+test('real Android build tools verify a signed APK before publication and authenticated download', { skip: !apk || !tools }, async t => {
+  if (!apk || !tools) throw new Error('Missing APK tool integration fixture');
+  const f = await fixture(t, { buildTools: tools }); const admin = await f.admin(); const d = await f.register();
+  const bytes = await readFile(apk);
+  const body = Buffer.concat([Buffer.from('--ams\r\nContent-Disposition: form-data; name="apk"; filename="../../untrusted.apk"\r\nContent-Type: application/vnd.android.package-archive\r\n\r\n'), bytes, Buffer.from('\r\n--ams--\r\n')]);
+  const response = await f.app.inject({ method: 'POST', url: '/api/v1/admin/releases', headers: { ...admin, 'content-type': 'multipart/form-data; boundary=ams' }, payload: body });
+  assert.equal(response.statusCode, 200, response.body);
+  const release = response.json().data; assert.equal(release.packageName, 'com.buddydeus.androidmanager');assert.equal(release.signers.length, 1);assert.equal(release.size, bytes.length);
+  assert.ok(release.versionCode > 1, 'Use a versionCode > 1 for the upgrade fixture');
+  const jobId = randomUUID(); assert.equal((await f.app.inject({ method: 'POST', url: `/api/v1/admin/devices/${d.deviceId}/upgrades`, headers: admin, payload: { jobId, releaseId: release.id } })).statusCode, 200);
+  const url = `/api/v1/device/releases/${release.id}/apk`;
+  assert.equal((await f.app.inject({ url })).statusCode, 401);
+  const download = await f.app.inject({ url, headers: { authorization: `Bearer ${d.token}` } });assert.equal(download.statusCode, 200);assert.deepEqual(download.rawPayload, bytes);
+});

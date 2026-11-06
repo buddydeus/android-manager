@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { releaseRoutes } from './releases.ts';
 import { rebootRoutes } from './reboot.ts';
 import { usageRoutes } from './usage.ts';
 import { catalogRoutes } from './catalog.ts';
@@ -14,7 +15,7 @@ import { adminRoutes } from './admin.ts';
 import websocket from '@fastify/websocket';
 import { RealtimeHub } from './realtime.ts';
 
-export interface AppOptions { directory: string; enrollmentKey: string; origin: string; now?: () => number; monotonic?: () => number }
+export interface AppOptions { directory: string; enrollmentKey: string; origin: string; now?: () => number; monotonic?: () => number; buildTools?: string }
 export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   if (options.enrollmentKey.length < 32 || new URL(options.origin).protocol !== 'https:') throw new Error('Invalid deployment configuration');
   const app = Fastify({ bodyLimit: 1024 * 1024 });
@@ -42,5 +43,6 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   usageRoutes(app, ctx);
   catalogRoutes(app, ctx);
   rebootRoutes(app, ctx);
+  await releaseRoutes(app, ctx, options.directory, options.buildTools ?? process.env.AMS_BUILD_TOOLS ?? '/opt/android-sdk/build-tools/36.0.0');
   return app;
 }

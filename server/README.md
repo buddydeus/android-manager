@@ -1,6 +1,6 @@
 # AMS 远程服务
 
-Node 24，Fastify + TypeScript + SQLite。需求与完整方案见 [远程管理扩展](../docs/DR-20261105-remote-management/requirement.md)。当前提供管理员会话、设备挑战注册、双向配置比较、WSS推送和设备状态上报，已接入Android端；提供使用记录/缺口的版本化补传、上海日期合计及分页应用目录；在线重启仅经当前WSS短时一次许可执行，不进入离线队列；安装包和网页在后续环节完成。
+Node 24，Fastify + TypeScript + SQLite。需求与完整方案见 [远程管理扩展](../docs/DR-20261105-remote-management/requirement.md)。当前提供管理员会话、设备挑战注册、双向配置比较、WSS推送和设备状态上报，已接入Android端；提供使用记录/缺口的版本化补传、上海日期合计及分页应用目录；在线重启仅经当前WSS短时一次许可执行，不进入离线队列；已提供流式APK发布、固定工具校验、鉴权下载与升级任务/版本回执；网页在后续环节完成。
 
 ```text
 设备接入凭据 → 一次性挑战及设备签名 → 独立设备 token → 配置同步
@@ -34,3 +34,5 @@ npm start
 同步接口仅接受完整 `candidate`（变更ID、实际保存时间、时间质量、来源、三项配置）；相同时间保留服务器版本。重传旧候选会返回当前服务端快照。网页保存配置须携带稳定 UUID `x-mutation-id`；请求重试复用同一ID，新的保存操作才生成新ID。固定服务器地址不代替身份验证，注册凭据可从 APK 提取的边界仍适用。
 
 设备WSS端点 `/api/v1/device/channel` 通过 Authorization 验证后建立当前连接；30秒心跳、90秒失联判离线，服务重启不恢复旧在线状态。推送只通知配置有变；设备通过HTTPS双向同步取得当前结果。`/device/status` 上报版本及带配置版本的执行摘要，不能把连接在线当作管控成功。
+
+APK工具固定为 Android build-tools 36.0.0。部署路径默认 `/opt/android-sdk/build-tools/36.0.0`，本地验证可设置 `AMS_BUILD_TOOLS`。APK最大100MiB，只接收管理员同源上传，不接受下载URL；哈希与元数据由文件计算。实际工具集成测试：设置 `AMS_TEST_APK`（本应用已签名、versionCode>1）与 `AMS_TEST_BUILD_TOOLS` 后执行 `npm test`；未设置时该集成用例明确跳过。

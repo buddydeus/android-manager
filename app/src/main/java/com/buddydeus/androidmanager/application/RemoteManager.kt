@@ -18,14 +18,14 @@ import java.util.concurrent.atomic.AtomicLong
 
 data class RemoteStatus(val deviceId:String="",val phase:String="等待接入",val lastSyncAt:Long?=null,val error:String="")
 class RemoteManager(
-    context:Context,private val coordinator:PolicyCoordinator,private val clock:SyncClockRepository,private val usage:UsageRepository,private val catalog:AppCatalog,
+    context:Context,private val coordinator:PolicyCoordinator,private val clock:SyncClockRepository,private val usage:UsageRepository,private val catalog:AppCatalog,private val upgrades:UpgradeController,
     private val owner:()->Boolean,private val boot:()->Int,private val audit:AuditSink,private val applyPolicy:()->Unit,
 ) {
     private val api=RemoteApi()
     private val commandDispatcher=Dispatchers.IO.limitedParallelism(1)
     private val commands=RebootController(usage,coordinator,boot,{connectionId},SystemClock::elapsedRealtime,
         { message -> socket?.send(message.toString()) ?: false },DevicePolicyGateway(context)::reboot,
-        { usage.operations("upgrade").any { it.optString("state")=="INSTALLING" } },::requestSync)
+        { upgrades.isInstalling() },::requestSync)
     val origin get()=api.origin
     private val identities=RemoteIdentityRepository(context.createDeviceProtectedStorageContext().filesDir)
     private val connectivity=context.getSystemService(ConnectivityManager::class.java)
@@ -40,6 +40,7 @@ class RemoteManager(
     private val channelFailures=AtomicLong()
     private var lastFailure=""
     private var catalogHash=""
+    private var upgradeRequests=UpgradeRequests()
     private val network=object:ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network:Network) { signals.trySend(Unit) }
     }
@@ -49,6 +50,14 @@ class RemoteManager(
         val generation=epoch.incrementAndGet()
         val run=CoroutineScope(SupervisorJob()+Dispatchers.IO);scope=run
         signals=Channel(Channel.CONFLATED)
+        val requests=UpgradeRequests();upgradeRequests=requests
+        run.launch {
+            requests.drain { token ->
+                try { upgrades.run(api,token) }
+                catch(e:CancellationException) { throw e }
+                catch(e:Exception) { report("升级连接暂不可用，等待身份或服务恢复");requestSync() }
+            }
+        }
         try { connectivity.registerDefaultNetworkCallback(network) }
         catch(e:Exception) { report("网络状态监听不可用") }
         run.launch {
@@ -62,7 +71,7 @@ class RemoteManager(
     }
     @Synchronized fun stop() {
         epoch.incrementAndGet();channelEpoch.incrementAndGet()
-        scope?.cancel();scope=null;signals.close();socket?.cancel();socket=null;connectionId=null
+        scope?.cancel();scope=null;signals.close();upgradeRequests.close();socket?.cancel();socket=null;connectionId=null
         api.client.dispatcher.cancelAll()
         try { connectivity.unregisterNetworkCallback(network) } catch(_:IllegalArgumentException) { /* Registration may have failed. */ }
         mutable.update { it.copy(phase="等待后台服务恢复") }
@@ -92,6 +101,8 @@ class RemoteManager(
                         .put("configMutationId",current.remote?.mutationId ?: JSONObject.NULL).put("configRevision",current.revision)
                         .put("policyRevision",current.lastEvaluationRevision)
                         .put("policyResult",coordinator.errors.value.ifBlank { if(current.lastEvaluationRevision==current.revision) current.lastEvaluation else "已保存，等待策略执行" }).put("alarmStatus",current.alarmStatus).put("bootStartedAtMs",usage.monitor()?.getLong("bootStartedAtMs") ?: JSONObject.NULL)))
+                currentCoroutineContext().ensureActive()
+                upgradeRequests.request(identity.token)
                 val receipts=usage.operations("reboot",true)
                 if(receipts.isNotEmpty()) {
                     val rows=org.json.JSONArray(receipts.map { JSONObject().put("id",it.getString("id")).put("version",it.getInt("version")).put("state",it.getString("state")).put("result",it.getString("result")) })
@@ -143,7 +154,7 @@ class RemoteManager(
                     when(message.getString("type")) {
                         "connected" -> { scope?.launch(commandDispatcher) { commands.disconnected() };connectionId=message.getString("connectionId").also { UUID.fromString(it) };channelFailures.set(0);mutable.update { it.copy(phase="已连接",error="") };sendHeartbeat(webSocket);signals.trySend(Unit) }
                         "heartbeat.ack" -> { require(message.getString("connectionId")==connectionId) }
-                        "config.changed" -> signals.trySend(Unit)
+                        "config.changed","upgrade.changed" -> signals.trySend(Unit)
                         "reboot.request","reboot.permit" -> scope?.launch(commandDispatcher) { try { commands.message(message) } catch(e:Exception) { report("远程命令或回执保存失败") } }
                         else -> error("不支持的远程消息")
                     }

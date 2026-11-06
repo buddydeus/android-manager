@@ -26,7 +26,8 @@ class ManagerGraph private constructor(val context:Context) {
     },cleanup=audit::cleanup,syncTime=syncClock::now)
     val usageStore by lazy { UsageRepository(deviceContext) }
     val usage by lazy { UsageTracker(context,usageStore,::bootCount,{ store.read().initialized },{ remote.requestSync() },{ coordinator.reportFailure("使用统计",it) }) }
-    val remote:RemoteManager by lazy { RemoteManager(context,coordinator,syncClock,usageStore,catalog,policy::isOwner,::bootCount,audit) { request("远程配置") } }
+    val upgrades:UpgradeController by lazy { UpgradeController(context,usageStore,coordinator,policy::isOwner,notify={ remote.requestSync() }) }
+    val remote:RemoteManager by lazy { RemoteManager(context,coordinator,syncClock,usageStore,catalog,upgrades,policy::isOwner,::bootCount,audit) { request("远程配置") } }
     val credentials:Credentials by lazy {
         check(context.getSystemService(UserManager::class.java).isUserUnlocked) { "请先解锁手机" }
         Credentials(context,audit)

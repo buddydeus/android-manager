@@ -117,3 +117,9 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 
 - `RemoteCommandStorageTest` 2项与 `UsageStorageTest` 5项共同通过：确认系统调用前已持久化ATTEMPTED、重复消息不重复调用、失败递增回执版本、旧ACK保留新结果；v1→v2迁移保留统计数据。
 - 本测试系统调用由显式替代函数接收并模拟系统拒绝，没有执行真实设备重启。仅操作UUID命名测试数据库，不设置/清除DO，不改真实配置。
+
+### 同日：APK校验与未提交安装的会话恢复
+
+- 服务端25项测试全部通过（显式提供实际已签名versionCode=2 APK及36.0.0工具目录，零跳过），包含真实apksigner/aapt2校验、内容寻址发布及鉴权下载字节一致性。
+- `UpgradeInstallerProbeTest` 在独立模拟器显式UUID夹具下通过：实际PackageManager解析同签名递增APK；仅创建会话，模拟创建后中断并清理孤儿；首次abandon异常后下一轮继续清理终态任务引用的会话。未调用commit，未证明静默安装。
+- 与既有使用/命令存储测试合计8项instrumentation通过；63项单测、Lint与Debug/Release构建通过。正式分发缺少接入凭据、或具备临时接入凭据但缺少外部签名时，assembleDistribution均按预期拒绝。
