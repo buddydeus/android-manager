@@ -104,3 +104,11 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 
 - 代码提交065a2eb对应的Debug APK覆盖安装至OPPO PKD130，`adb install -r`返回Success；MainActivity启动返回Status: ok（WARM，1099ms）。
 - 本轮仅确认安装与启动；未执行实机密码操作、规则修改或新版界面逐页验收。
+
+## 2026-11-06：远程扩展使用记录存储验证
+
+- 设备：独立 `ams_remote_validation` Android 16 模拟器，序列号 `emulator-5556`，未使用实机配置、密码目录或 DPM 夹具。
+- `UsageStorageTest`：5项通过。覆盖旧上传确认不清除新版本、服务重建保留未知端点及系统启动身份、唯一历史配对修正原记录且不重复、快速停止/启动重新注册监听、空历史保留首次覆盖未知。
+- 夹具为每次测试创建的 UUID 命名 DP 数据库，测试结束关闭并删除该数据库。历史事件在此测试中显式构造；结果不证明 OEM 屏幕广播、UsageStats 历史完整性或后台存活。
+- 命令：`ANDROID_SERIAL=emulator-5556 ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.buddydeus.androidmanager.UsageStorageTest`（JDK21 / SDK36）。
+- 首次观察前至估算系统启动的区间标记覆盖未知，不将未观察到的使用行为记为零。网络端到端、真实屏幕事件、升级、重启和 ColorOS 扩展验证仍未完成。

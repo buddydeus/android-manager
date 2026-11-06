@@ -1,6 +1,6 @@
 # AMS 远程服务
 
-Node 24，Fastify + TypeScript + SQLite。需求与完整方案见 [远程管理扩展](../docs/DR-20261105-remote-management/requirement.md)。当前提供管理员会话、设备挑战注册、双向配置比较、WSS推送和设备状态上报，已接入Android端；使用记录、安装包和网页在后续环节完成。
+Node 24，Fastify + TypeScript + SQLite。需求与完整方案见 [远程管理扩展](../docs/DR-20261105-remote-management/requirement.md)。当前提供管理员会话、设备挑战注册、双向配置比较、WSS推送和设备状态上报，已接入Android端；提供使用记录/缺口的版本化补传、上海日期合计及分页应用目录；安装包和网页在后续环节完成。
 
 ```text
 设备接入凭据 → 一次性挑战及设备签名 → 独立设备 token → 配置同步

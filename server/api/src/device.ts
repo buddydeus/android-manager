@@ -83,7 +83,7 @@ export function deviceRoutes(app: FastifyInstance, ctx: Context): void {
     const device = requireDevice(ctx, request);
     const input = z.object({
       versionCode: z.int().positive(), versionName: z.string().max(100), apiLevel: z.int().min(30).max(100), bootId: z.int().min(-1),
-      status: z.object({ configMutationId: z.uuid().nullable(), configRevision: z.int().nonnegative(), policyRevision: z.int().min(-1).default(-1), policyResult: z.string().max(2000), alarmStatus: z.string().max(2000) }).strict(),
+      status: z.object({ configMutationId: z.uuid().nullable(), configRevision: z.int().nonnegative(), policyRevision: z.int().min(-1).default(-1), policyResult: z.string().max(2000), alarmStatus: z.string().max(2000), bootStartedAtMs: z.int().nonnegative().nullable().optional() }).strict(),
     }).strict().parse(request.body);
     ctx.store.put('devices', device.id, device.id, { ...device, versionCode: input.versionCode, versionName: input.versionName, apiLevel: input.apiLevel, lastSeenAt: ctx.now(), status: { ...input.status, bootId: input.bootId } });
     return { data: { accepted: true } };

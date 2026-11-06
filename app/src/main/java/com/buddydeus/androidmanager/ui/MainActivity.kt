@@ -37,7 +37,7 @@ class MainActivity:ComponentActivity() {
             picker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION).putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI,Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADocuments")))
         },onAlarms={
             if(Build.VERSION.SDK_INT>=31) startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:$packageName")))
-        }) }
+        },onUsageAccess={ startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS,Uri.parse("package:$packageName"))) }) }
     }
     override fun onUserLeaveHint() { super.onUserLeaveHint();if(!selecting && ::model.isInitialized) model.leave() }
     override fun onStop() { if(!isChangingConfigurations && !selecting && ::model.isInitialized) model.leave();super.onStop() }

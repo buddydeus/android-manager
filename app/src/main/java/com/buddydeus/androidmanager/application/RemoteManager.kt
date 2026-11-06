@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 data class RemoteStatus(val deviceId:String="",val phase:String="等待接入",val lastSyncAt:Long?=null,val error:String="")
 class RemoteManager(
-    context:Context,private val coordinator:PolicyCoordinator,private val clock:SyncClockRepository,
+    context:Context,private val coordinator:PolicyCoordinator,private val clock:SyncClockRepository,private val usage:UsageRepository,private val catalog:AppCatalog,
     private val owner:()->Boolean,private val boot:()->Int,private val audit:AuditSink,private val applyPolicy:()->Unit,
 ) {
     private val api=RemoteApi()
@@ -35,9 +35,11 @@ class RemoteManager(
     private val channelEpoch=AtomicLong()
     private val channelFailures=AtomicLong()
     private var lastFailure=""
+    private var catalogHash=""
     private val network=object:ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network:Network) { signals.trySend(Unit) }
     }
+    fun requestSync() { signals.trySend(Unit) }
     @Synchronized fun start() {
         if(scope!=null) return
         val generation=epoch.incrementAndGet()
@@ -85,7 +87,24 @@ class RemoteManager(
                     .put("apiLevel",android.os.Build.VERSION.SDK_INT).put("bootId",boot()).put("status",JSONObject()
                         .put("configMutationId",current.remote?.mutationId ?: JSONObject.NULL).put("configRevision",current.revision)
                         .put("policyRevision",current.lastEvaluationRevision)
-                        .put("policyResult",coordinator.errors.value.ifBlank { if(current.lastEvaluationRevision==current.revision) current.lastEvaluation else "已保存，等待策略执行" }).put("alarmStatus",current.alarmStatus)))
+                        .put("policyResult",coordinator.errors.value.ifBlank { if(current.lastEvaluationRevision==current.revision) current.lastEvaluation else "已保存，等待策略执行" }).put("alarmStatus",current.alarmStatus).put("bootStartedAtMs",usage.monitor()?.getLong("bootStartedAtMs") ?: JSONObject.NULL)))
+                val apps=catalog.load(current.appCache).values.sortedBy { it.packageName }
+                require(apps.size<=5000) { "应用目录超过接入上限" }
+                val entries=apps.map { JSONObject().put("packageName",it.packageName).put("label",it.name.take(1000)).put("installed",it.installed).put("system",it.system).put("protection",it.protection.take(1000)) }
+                val hash=entries.joinToString().let { java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }
+                if(hash!=catalogHash) {
+                    val snapshotId=UUID.randomUUID().toString();val pages=entries.chunked(200).ifEmpty { listOf(emptyList()) }
+                    pages.forEachIndexed { page,rows -> api.request("/api/v1/device/apps",identity.token,JSONObject().put("snapshotId",snapshotId).put("page",page).put("pages",pages.size).put("entries",org.json.JSONArray(rows))) }
+                    catalogHash=hash
+                }
+                for(batchIndex in 0 until 20) {
+                    val batch=usage.pending()
+                    if(batch.getJSONArray("sessions").length()+batch.getJSONArray("gaps").length()==0) break
+                    run {
+                        usage.acknowledge(api.request("/api/v1/device/usage",identity.token,batch))
+                        if(batchIndex==19) signals.trySend(Unit)
+                    }
+                }
                 currentCoroutineContext().ensureActive()
                 lastFailure="";retry=null
                 mutable.update { it.copy(phase=if(connectionId==null) "配置已同步，正在连接" else "已连接",lastSyncAt=System.currentTimeMillis(),error="") }

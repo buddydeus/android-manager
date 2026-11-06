@@ -24,7 +24,9 @@ class ManagerGraph private constructor(val context:Context) {
         val wanted=if(enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
         if(context.packageManager.getComponentEnabledSetting(component)!=wanted) context.packageManager.setComponentEnabledSetting(component,wanted,PackageManager.DONT_KILL_APP)
     },cleanup=audit::cleanup,syncTime=syncClock::now)
-    val remote:RemoteManager by lazy { RemoteManager(context,coordinator,syncClock,policy::isOwner,::bootCount,audit) { request("远程配置") } }
+    val usageStore by lazy { UsageRepository(deviceContext) }
+    val usage by lazy { UsageTracker(context,usageStore,::bootCount,{ store.read().initialized },{ remote.requestSync() },{ coordinator.reportFailure("使用统计",it) }) }
+    val remote:RemoteManager by lazy { RemoteManager(context,coordinator,syncClock,usageStore,catalog,policy::isOwner,::bootCount,audit) { request("远程配置") } }
     val credentials:Credentials by lazy {
         check(context.getSystemService(UserManager::class.java).isUserUnlocked) { "请先解锁手机" }
         Credentials(context,audit)

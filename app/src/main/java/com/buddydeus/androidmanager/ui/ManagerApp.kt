@@ -26,19 +26,19 @@ internal class ManagerActions(
     val setBlacklisted: (String, Boolean) -> Unit = { _, _ -> },
     val saveSchedule: (List<DayWindow?>) -> Unit = {},
     val loadLogs: (String, LogCategory?, Int) -> Unit = { _, _, _ -> },
-    val pickDirectory: () -> Unit = {}, val checkAlarms: () -> Unit = {},
+    val pickDirectory: () -> Unit = {}, val checkAlarms: () -> Unit = {}, val usageAccess: () -> Unit = {},
     val recover: () -> Unit = {}, val refresh: () -> Unit = {},
     val leave: () -> Unit = {}, val clearPin: () -> Unit = {},
 )
 
-@Composable fun ManagerApp(model: ManagerViewModel, onPick: () -> Unit, onAlarms: () -> Unit) {
+@Composable fun ManagerApp(model: ManagerViewModel, onPick: () -> Unit, onAlarms: () -> Unit, onUsageAccess: () -> Unit = {}) {
     val state by model.ui.collectAsState()
-    val actions = remember(model, onPick, onAlarms) {
+    val actions = remember(model, onPick, onAlarms, onUsageAccess) {
         ManagerActions(
             login = model::login, setPin = model::setPin, changePin = model::changePin,
             setEnabled = model::setEnabled, setBlacklisted = model::setBlacklisted,
             saveSchedule = model::saveSchedule, loadLogs = model::loadLogs,
-            pickDirectory = onPick, checkAlarms = onAlarms, recover = model::recover,
+            pickDirectory = onPick, checkAlarms = onAlarms, usageAccess = onUsageAccess, recover = model::recover,
             refresh = model::refresh, leave = model::leave, clearPin = model::clearPin,
         )
     }

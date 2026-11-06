@@ -291,6 +291,9 @@ internal fun timeText(minute: Int) = "%02d:%02d".format(java.util.Locale.ROOT, m
             Text("权限", style = MaterialTheme.typography.titleLarge)
             StatusRow("精确闹钟", state.config?.alarmStatus ?: "尚无执行结果", state.config?.alarmStatus?.startsWith("定时执行不可用") == true)
             SecondaryAction("检查精确闹钟授权", !state.busy, onClick = actions.checkAlarms)
+            StatusRow("使用情况访问权",if(state.usageAccess) "已授权，可补查有限历史" else "未授权，仍记录实时事件")
+            SupportingText("从解锁到息屏统计；无法补齐的事件标为不完整。授权不会上传其他应用的使用行为。")
+            SecondaryAction("管理使用情况访问权", !state.busy, onClick = actions.usageAccess)
         }
         Section {
             Text("密码目录", style = MaterialTheme.typography.titleLarge)

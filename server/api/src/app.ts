@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import { usageRoutes } from './usage.ts';
+import { catalogRoutes } from './catalog.ts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../../contracts/index.ts';
@@ -36,5 +38,7 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   deviceRoutes(app, ctx);
   authRoutes(app, ctx);
   adminRoutes(app, ctx);
+  usageRoutes(app, ctx);
+  catalogRoutes(app, ctx);
   return app;
 }

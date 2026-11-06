@@ -30,9 +30,11 @@ class ManagerEventService:DeviceAdminService() {
         ContextCompat.registerReceiver(this,roleReceiver,roles,ContextCompat.RECEIVER_NOT_EXPORTED)
         listOf(Settings.Secure.getUriFor(Settings.Secure.DEFAULT_INPUT_METHOD),Settings.Secure.getUriFor(Settings.Secure.ENABLED_INPUT_METHODS),Settings.Global.getUriFor(Settings.Global.AUTO_TIME),Settings.Global.getUriFor(Settings.Global.AUTO_TIME_ZONE)).forEach { contentResolver.registerContentObserver(it,false,observer) }
         PolicyExecutionService.enqueue(this,"事件服务恢复")
+        ManagerGraph.get(this).usage.start()
         ManagerGraph.get(this).remote.start()
     }
     override fun onDestroy() {
+        ManagerGraph.get(this).usage.stop()
         ManagerGraph.get(this).remote.stop()
         unregisterReceiver(receiver);unregisterReceiver(roleReceiver);contentResolver.unregisterContentObserver(observer);super.onDestroy()
     }

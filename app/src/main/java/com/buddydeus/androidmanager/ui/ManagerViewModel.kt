@@ -17,7 +17,7 @@ data class ManagerUiState(
     val screen:Screen=Screen.LOGIN,val busy:Boolean=false,val message:String="",val config:ManagerState?=null,
     val error:String="",val location:String="",val owner:Boolean=false,val logs:List<String> = emptyList(),
     val logsQuery:LogPageKey?=null,
-    val remote:RemoteStatus=RemoteStatus(),
+    val remote:RemoteStatus=RemoteStatus(),val usageAccess:Boolean=false,
 )
 class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
     private val mutable=MutableStateFlow(ManagerUiState())
@@ -54,8 +54,8 @@ class ManagerViewModel(private val graph:ManagerGraph):ViewModel() {
             file is PasswordFileState.Broken -> Screen.STORAGE_ERROR
             else -> Screen.LOGIN
         }
-        post(epoch) { it.copy(screen=screen,config=s,owner=owner,location=c.passwords.location(),message=if(file is PasswordFileState.Broken && screen==Screen.STORAGE_ERROR) file.reason else "") }
-        if(s.initialized) graph.request("管理界面进入")
+        post(epoch) { it.copy(screen=screen,config=s,owner=owner,usageAccess=graph.usage.hasAccess(),location=c.passwords.location(),message=if(file is PasswordFileState.Broken && screen==Screen.STORAGE_ERROR) file.reason else "") }
+        if(s.initialized) { graph.request("管理界面进入");graph.usage.refreshHistory() }
     }
     fun directory(uri:Uri)=task { epoch ->
         graph.credentials.passwords.selectDirectory(uri)
