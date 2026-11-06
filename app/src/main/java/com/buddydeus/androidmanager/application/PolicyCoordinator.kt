@@ -52,6 +52,11 @@ class PolicyCoordinator(
         if(changed) log(AuditEvent(LogCategory.CONFIG_CHANGE,"远程配置","已保存",revision=next.revision))
         changed
     }
+    fun <T> remoteAction(action:String,block:()->T):T=synchronized(lock) {
+        check(store.read().initialized && policy.isOwner()) { "设备尚未具备远程管理能力" }
+        try { block().also { log(AuditEvent(LogCategory.CONFIG_CHANGE,action,"已尝试系统操作")) } }
+        catch(e:Exception) { log(AuditEvent(LogCategory.PERMISSION_ERROR,action,e.message ?: "系统操作失败"));throw e }
+    }
     fun reconcile(reason:String,bootId:Int?=null) = synchronized(lock) {
         try {
             mutableError.value=""

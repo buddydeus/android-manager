@@ -22,6 +22,10 @@ class RemoteManager(
     private val owner:()->Boolean,private val boot:()->Int,private val audit:AuditSink,private val applyPolicy:()->Unit,
 ) {
     private val api=RemoteApi()
+    private val commandDispatcher=Dispatchers.IO.limitedParallelism(1)
+    private val commands=RebootController(usage,coordinator,boot,{connectionId},SystemClock::elapsedRealtime,
+        { message -> socket?.send(message.toString()) ?: false },DevicePolicyGateway(context)::reboot,
+        { usage.operations("upgrade").any { it.optString("state")=="INSTALLING" } },::requestSync)
     val origin get()=api.origin
     private val identities=RemoteIdentityRepository(context.createDeviceProtectedStorageContext().filesDir)
     private val connectivity=context.getSystemService(ConnectivityManager::class.java)
@@ -88,6 +92,13 @@ class RemoteManager(
                         .put("configMutationId",current.remote?.mutationId ?: JSONObject.NULL).put("configRevision",current.revision)
                         .put("policyRevision",current.lastEvaluationRevision)
                         .put("policyResult",coordinator.errors.value.ifBlank { if(current.lastEvaluationRevision==current.revision) current.lastEvaluation else "已保存，等待策略执行" }).put("alarmStatus",current.alarmStatus).put("bootStartedAtMs",usage.monitor()?.getLong("bootStartedAtMs") ?: JSONObject.NULL)))
+                val receipts=usage.operations("reboot",true)
+                if(receipts.isNotEmpty()) {
+                    val rows=org.json.JSONArray(receipts.map { JSONObject().put("id",it.getString("id")).put("version",it.getInt("version")).put("state",it.getString("state")).put("result",it.getString("result")) })
+                    val ack=api.request("/api/v1/device/commands/receipts",identity.token,JSONObject().put("receipts",rows)).getJSONArray("accepted")
+                    for(index in 0 until ack.length()) { val row=ack.getJSONObject(index);usage.acknowledgeOperation(row.getString("id"),row.getInt("version")) }
+                    if(receipts.size==200) signals.trySend(Unit)
+                }
                 val apps=catalog.load(current.appCache).values.sortedBy { it.packageName }
                 require(apps.size<=5000) { "应用目录超过接入上限" }
                 val entries=apps.map { JSONObject().put("packageName",it.packageName).put("label",it.name.take(1000)).put("installed",it.installed).put("system",it.system).put("protection",it.protection.take(1000)) }
@@ -130,9 +141,10 @@ class RemoteManager(
                     require(text.toByteArray(Charsets.UTF_8).size<=65536)
                     val message=JSONObject(text)
                     when(message.getString("type")) {
-                        "connected" -> { connectionId=message.getString("connectionId").also { UUID.fromString(it) };channelFailures.set(0);mutable.update { it.copy(phase="已连接",error="") };sendHeartbeat(webSocket);signals.trySend(Unit) }
+                        "connected" -> { scope?.launch(commandDispatcher) { commands.disconnected() };connectionId=message.getString("connectionId").also { UUID.fromString(it) };channelFailures.set(0);mutable.update { it.copy(phase="已连接",error="") };sendHeartbeat(webSocket);signals.trySend(Unit) }
                         "heartbeat.ack" -> { require(message.getString("connectionId")==connectionId) }
                         "config.changed" -> signals.trySend(Unit)
+                        "reboot.request","reboot.permit" -> scope?.launch(commandDispatcher) { try { commands.message(message) } catch(e:Exception) { report("远程命令或回执保存失败") } }
                         else -> error("不支持的远程消息")
                     }
                 } catch(e:Exception) { webSocket.close(1008,"protocol error");report("远程协议或存储异常") }
@@ -143,7 +155,7 @@ class RemoteManager(
             private fun disconnected() {
                 synchronized(this@RemoteManager) {
                     if(!current()) return
-                    socket=null;connectionId=null;report("推送连接已断开，等待恢复")
+                    socket=null;connectionId=null;scope?.launch(commandDispatcher) { commands.disconnected() };report("推送连接已断开，等待恢复")
                     val attempt=channelFailures.incrementAndGet().coerceAtMost(9).toInt()
                     val wait=(1000L shl attempt).coerceAtMost(300_000)+kotlin.random.Random.nextLong(1000)
                     scope?.launch { delay(wait);if(current()) signals.trySend(Unit) }

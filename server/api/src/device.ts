@@ -7,10 +7,11 @@ import type { Store } from './db.ts';
 import type { RealtimeHub } from './realtime.ts';
 
 export interface Context {
-  store: Store; now: () => number; enrollmentHash: string; origin: string;
+  store: Store; now: () => number; monotonic: () => number; enrollmentHash: string; origin: string;
   notify: (deviceId: string, message: unknown) => boolean;
   disconnect: (deviceId: string) => void;
   realtime?: RealtimeHub;
+  commandMessage?: (deviceId: string, connectionId: string, raw: unknown) => unknown;
 }
 export function digest(value: string): string { return createHash('sha256').update(value).digest('hex'); }
 export function secretEquals(value: string, expectedHash: string): boolean { return timingSafeEqual(Buffer.from(digest(value), 'hex'), Buffer.from(expectedHash, 'hex')); }

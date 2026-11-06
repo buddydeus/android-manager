@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { rebootRoutes } from './reboot.ts';
 import { usageRoutes } from './usage.ts';
 import { catalogRoutes } from './catalog.ts';
 import type { FastifyInstance } from 'fastify';
@@ -13,12 +14,12 @@ import { adminRoutes } from './admin.ts';
 import websocket from '@fastify/websocket';
 import { RealtimeHub } from './realtime.ts';
 
-export interface AppOptions { directory: string; enrollmentKey: string; origin: string; now?: () => number }
+export interface AppOptions { directory: string; enrollmentKey: string; origin: string; now?: () => number; monotonic?: () => number }
 export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   if (options.enrollmentKey.length < 32 || new URL(options.origin).protocol !== 'https:') throw new Error('Invalid deployment configuration');
   const app = Fastify({ bodyLimit: 1024 * 1024 });
   const store = new Store(options.directory);
-  const ctx: Context = { store, now: options.now ?? Date.now, enrollmentHash: digest(options.enrollmentKey), origin: options.origin, notify: () => false, disconnect: () => {} };
+  const ctx: Context = { store, now: options.now ?? Date.now, monotonic: options.monotonic ?? (() => performance.now()), enrollmentHash: digest(options.enrollmentKey), origin: options.origin, notify: () => false, disconnect: () => {} };
   await app.register(cookie);
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
   ctx.realtime = new RealtimeHub(app, ctx);
@@ -40,5 +41,6 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   adminRoutes(app, ctx);
   usageRoutes(app, ctx);
   catalogRoutes(app, ctx);
+  rebootRoutes(app, ctx);
   return app;
 }

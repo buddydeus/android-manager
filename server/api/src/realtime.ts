@@ -20,7 +20,12 @@ export class RealtimeHub {
       socket.send(JSON.stringify({ type: 'connected', connectionId: connection.id, serverAtMs: ctx.now() }));
       socket.on('message', raw => {
         try {
-          const input = z.object({ type: z.literal('heartbeat'), bootId: z.int().min(-1), syncError: z.string().max(300).default('') }).strict().parse(JSON.parse(raw.toString()) as unknown);
+          const rawInput: unknown = JSON.parse(raw.toString());
+          if (rawInput && typeof rawInput === 'object' && 'type' in rawInput && rawInput.type !== 'heartbeat') {
+            if (this.connections.get(device.id) !== connection) { socket.close(1008, 'stale connection'); return; }
+            socket.send(JSON.stringify(ctx.commandMessage?.(device.id, connection.id, rawInput))); return;
+          }
+          const input = z.object({ type: z.literal('heartbeat'), bootId: z.int().min(-1), syncError: z.string().max(300).default('') }).strict().parse(rawInput);
           connection.heartbeatAt = ctx.now(); connection.bootId = input.bootId;
           const current = ctx.store.get('devices', device.id, deviceSchema);
           if (!current) { socket.close(1008, 'identity unavailable'); return; }

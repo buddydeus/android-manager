@@ -112,3 +112,8 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 夹具为每次测试创建的 UUID 命名 DP 数据库，测试结束关闭并删除该数据库。历史事件在此测试中显式构造；结果不证明 OEM 屏幕广播、UsageStats 历史完整性或后台存活。
 - 命令：`ANDROID_SERIAL=emulator-5556 ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.buddydeus.androidmanager.UsageStorageTest`（JDK21 / SDK36）。
 - 首次观察前至估算系统启动的区间标记覆盖未知，不将未观察到的使用行为记为零。网络端到端、真实屏幕事件、升级、重启和 ColorOS 扩展验证仍未完成。
+
+### 同日：远程命令存储
+
+- `RemoteCommandStorageTest` 2项与 `UsageStorageTest` 5项共同通过：确认系统调用前已持久化ATTEMPTED、重复消息不重复调用、失败递增回执版本、旧ACK保留新结果；v1→v2迁移保留统计数据。
+- 本测试系统调用由显式替代函数接收并模拟系统拒绝，没有执行真实设备重启。仅操作UUID命名测试数据库，不设置/清除DO，不改真实配置。

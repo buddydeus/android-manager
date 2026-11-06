@@ -19,13 +19,17 @@ object UsageCodec {
         quality=UsageQuality.valueOf(j.getString("quality")),source=UsageSource.valueOf(j.getString("source")),clockAdjusted=j.getBoolean("clockAdjusted"))
     fun number(j:JSONObject,key:String)=if(j.isNull(key)) null else j.getLong(key)
 }
-class UsageRepository(context:Context,databaseName:String="remote.db"):SQLiteOpenHelper(context.createDeviceProtectedStorageContext(),databaseName,null,1) {
+class UsageRepository(context:Context,databaseName:String="remote.db"):SQLiteOpenHelper(context.createDeviceProtectedStorageContext(),databaseName,null,2) {
     override fun onCreate(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE records(id TEXT PRIMARY KEY,kind TEXT NOT NULL,version INTEGER NOT NULL,dirty INTEGER NOT NULL,untilMs INTEGER NOT NULL,payload TEXT NOT NULL)")
         db.execSQL("CREATE INDEX records_pending ON records(dirty,kind)")
         db.execSQL("CREATE TABLE metadata(id TEXT PRIMARY KEY,payload TEXT NOT NULL)")
+        createOperations(db)
     }
-    override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int) { error("不支持的远程存储版本 $oldVersion → $newVersion") }
+    private fun createOperations(db:SQLiteDatabase) { db.execSQL("CREATE TABLE operations(id TEXT PRIMARY KEY,kind TEXT NOT NULL,pending INTEGER NOT NULL,payload TEXT NOT NULL)") }
+    override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int) {
+        check(oldVersion==1 && newVersion==2) { "不支持的远程存储版本 $oldVersion → $newVersion" };createOperations(db)
+    }
     override fun onDowngrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int) { error("远程存储版本过新") }
     private fun meta(db:SQLiteDatabase,key:String):JSONObject?=db.rawQuery("SELECT payload FROM metadata WHERE id=?",arrayOf(key)).use { if(it.moveToFirst()) JSONObject(it.getString(0)) else null }
     private fun saveMeta(db:SQLiteDatabase,key:String,j:JSONObject) { check(db.insertWithOnConflict("metadata",null,ContentValues().apply { put("id",key);put("payload",j.toString()) },SQLiteDatabase.CONFLICT_REPLACE)!=-1L) }
@@ -112,6 +116,15 @@ class UsageRepository(context:Context,databaseName:String="remote.db"):SQLiteOpe
         try { listOf("sessions","gaps").forEach { kind -> val rows=response.getJSONArray(kind);for(i in 0 until rows.length()) {
             val r=rows.getJSONObject(i);db.execSQL("UPDATE records SET dirty=0 WHERE id=? AND kind=? AND version=?",arrayOf(r.getString("id"),kind,r.getInt("recordVersion")))
         } };db.setTransactionSuccessful() } finally { db.endTransaction() }
+    }
+    @Synchronized fun operation(id:String):JSONObject?=readableDatabase.rawQuery("SELECT payload FROM operations WHERE id=?",arrayOf(id)).use { if(it.moveToFirst()) JSONObject(it.getString(0)) else null }
+    @Synchronized fun saveOperation(kind:String,j:JSONObject) {
+        check(writableDatabase.insertWithOnConflict("operations",null,ContentValues().apply { put("id",j.getString("id"));put("kind",kind);put("pending",if(j.getBoolean("pending")) 1 else 0);put("payload",j.toString()) },SQLiteDatabase.CONFLICT_REPLACE)!=-1L) { "远程操作保存失败" }
+    }
+    @Synchronized fun operations(kind:String,pendingOnly:Boolean=false):List<JSONObject> = readableDatabase.rawQuery("SELECT payload FROM operations WHERE kind=?"+(if(pendingOnly) " AND pending=1" else "")+" ORDER BY rowid DESC LIMIT 200",arrayOf(kind)).use { c -> buildList { while(c.moveToNext()) add(JSONObject(c.getString(0))) } }
+    @Synchronized fun acknowledgeOperation(id:String,version:Int) {
+        val j=operation(id) ?: return
+        if(j.getInt("version")==version) saveOperation(j.getString("kind"),j.put("pending",false))
     }
     private fun cleanup(db:SQLiteDatabase,wall:Long) {
         val cutoff=java.time.Instant.ofEpochMilli(wall).atZone(ZoneId.of("Asia/Shanghai")).toLocalDate().minusDays(90).atStartOfDay(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli()

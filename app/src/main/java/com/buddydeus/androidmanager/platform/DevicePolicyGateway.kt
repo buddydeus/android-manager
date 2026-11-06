@@ -11,6 +11,7 @@ import java.time.ZoneId
 class DevicePolicyGateway(private val context: Context) : DevicePolicyPort {
     private val dpm=context.getSystemService(DevicePolicyManager::class.java)
     private val admin=ComponentName(context,ManagerAdminReceiver::class.java)
+    fun reboot() { check(isOwner()) { "未取得 Device Owner" };dpm.reboot(admin) }
     override fun isOwner()=dpm.isDeviceOwnerApp(context.packageName)
     override fun inspect(packageName: String): PackagePolicyState = PackagePolicyState(
         runCatching { dpm.isPackageSuspended(admin,packageName) }.getOrNull(),runCatching { dpm.isApplicationHidden(admin,packageName) }.getOrNull())
