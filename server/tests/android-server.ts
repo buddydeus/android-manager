@@ -1,0 +1,21 @@
+// Explicit loopback-only Android integration fixture, excluded from the runtime image.
+import { createServer } from 'node:https';
+import { readFile, stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { z } from 'zod';
+import { createApp } from '../api/src/app.ts';
+import { provisionAdmin } from '../api/src/auth.ts';
+import { Store } from '../api/src/db.ts';
+const path = process.env.AMS_ANDROID_FIXTURE;
+if (!path) throw new Error('Explicit Android fixture required');
+if (((await stat(path)).mode & 0o077) !== 0) throw new Error('Private fixture file required');
+const fixture = z.object({ fixtureId: z.uuid(), enrollmentKey: z.string().min(32), adminPassword: z.string().min(12) }).parse(JSON.parse(await readFile(path, 'utf8')) as unknown);
+const root = dirname(resolve(path));const directory = join(root, 'server-data');
+const store = new Store(directory);const hasAdmin = store.db.prepare('SELECT 1 FROM admins LIMIT 1').get();store.close();
+if (!hasAdmin) provisionAdmin(directory, 'operator', fixture.adminPassword);
+const app = await createApp({ directory, enrollmentKey: fixture.enrollmentKey, origin: 'https://localhost:8443', webRoot: join(import.meta.dirname, '../dist/web'), buildTools: process.env.AMS_TEST_BUILD_TOOLS });
+await app.ready();
+const server = createServer({ key: await readFile(join(root, 'tls/server.key')), cert: await readFile(join(root, 'tls/server.pem')) }, (request, response) => { app.server.emit('request', request, response); });
+server.on('upgrade', (request, socket, head) => app.server.emit('upgrade', request, socket, head));
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { void app.close().finally(() => server.close()); });
+server.listen(8443, '127.0.0.1', () => process.stdout.write('隔离Android联调服务就绪\n'));

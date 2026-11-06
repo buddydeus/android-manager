@@ -37,7 +37,8 @@ async function save() {
 }
 </script>
 <template><section v-if="current" class="panel">
-  <section class="result-strip" aria-label="配置执行状态"><div><strong>{{ !received ? '等待设备接收' : !executed ? '已接收，等待执行' : '设备已回报执行结果' }}</strong><p>{{ executed ? device.status.policyResult : '配置保存不代表系统限制已生效。' }}</p></div><small>配置版本 {{ current.serverRevision }}<br>{{ dateTime(current.modifiedAtMs) }}</small></section>
+  <section class="result-strip" aria-label="配置执行状态"><div><strong>{{ !received ? '等待设备接收' : !executed ? '已接收，等待执行' : '设备已回报执行结果' }}</strong><p>{{ received ? device.status.policyResult : '配置保存不代表系统限制已生效。' }}</p></div><small>配置版本 {{ current.serverRevision }}<br>{{ dateTime(current.modifiedAtMs) }}</small></section>
+  <p v-if="received && device.status.alarmStatus" class="warning" role="status">{{ device.status.alarmStatus }}</p>
   <p v-if="remoteChanged && dirty" class="warning" role="status">服务器配置已变化。当前草稿仍保留，保存时将按本次修改时间比较。<button :disabled="busy" @click="reset">丢弃草稿并读取服务器配置</button></p>
   <form @submit.prevent="save"><div class="section-title"><h3>管控规则</h3><span class="muted">{{ dirty ? '有未保存的修改' : '与当前配置一致' }}</span></div>
     <label class="toggle"><input v-model="draft.enabled" type="checkbox" :disabled="busy">管控总开关</label><p class="muted">远程管理与使用统计持续运行。关闭总开关会解除本软件施加的限制并保留规则。</p>

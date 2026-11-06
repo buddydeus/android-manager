@@ -37,14 +37,15 @@ export function rebootRoutes(app: FastifyInstance, ctx: Context): void {
   });
   app.post('/api/v1/device/commands/receipts', request => {
     const device = requireDevice(ctx, request); const rows = z.object({ receipts: z.array(receiptSchema).max(200) }).strict().parse(request.body).receipts;
+    const accepted: { id: string; version: number }[] = [];const orphaned: { id: string; version: number }[] = [];
     ctx.store.transaction(() => { for (const receipt of rows) {
       const key = `${device.id}:${receipt.id}`; const row = ctx.store.get('command_receipts', key, commandSchema);
-      if (!row) throw new ApiError(404, 'COMMAND_NOT_FOUND', '命令不存在');
-      if (receipt.state === 'ATTEMPTED' && !row.permitIssued) throw new ApiError(409, 'PERMIT_REQUIRED', '命令未获得执行许可');
+      if (!row || (receipt.state === 'ATTEMPTED' && !row.permitIssued)) { orphaned.push({ id: receipt.id, version: receipt.version });continue; }
       if (row.receiptVersion === receipt.version && JSON.stringify(row.receipt) !== JSON.stringify(receipt)) throw new ApiError(409, 'RECEIPT_REUSE', '回执版本内容不一致');
       if (receipt.version > row.receiptVersion) ctx.store.put('command_receipts', key, device.id, { ...row, state: receipt.state, result: receipt.result, receiptVersion: receipt.version, receipt });
+      accepted.push({ id: receipt.id, version: receipt.version });
     } });
-    return { data: { accepted: rows.map(r => ({ id: r.id, version: r.version })) } };
+    return { data: { accepted, orphaned } };
   });
   app.get('/api/v1/admin/devices/:id/commands', request => {
     requireAdmin(ctx, request); const device = targetDevice(ctx, request);

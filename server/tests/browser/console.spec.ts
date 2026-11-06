@@ -58,3 +58,15 @@ test('a configuration read started before a successful save cannot restore old f
   const stale = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith('/config'));release();await (await stale).finished();await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   if (expected) await expect(toggle).toBeChecked();else await expect(toggle).not.toBeChecked();
 });
+
+test('current policy failures and alarm warnings remain visible without claiming execution success', async ({ page }) => {
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();
+  let failed = false;
+  await page.route(/\/api\/v1\/admin\/devices\/[^/?]+$/, async route => {
+    const response = await route.fetch();const body = await response.json();
+    const config = await page.request.get(route.request().url() + '/config');const mutationId = (await config.json()).data.mutationId;
+    body.data.status = { ...body.data.status, configMutationId: mutationId, configRevision: 9, policyRevision: failed ? 8 : 9, policyResult: failed ? '系统拒绝暂停测试应用' : '已核验当前策略', alarmStatus: '定时执行不可用：请授予精确闹钟权限' };await route.fulfill({ response, json: body });
+  });
+  await page.getByRole('button', { name: /^测试手机/ }).click();await expect(page.getByText('定时执行不可用：请授予精确闹钟权限', { exact: true })).toBeVisible();
+  failed = true;await page.getByRole('button', { name: '刷新', exact: true }).click();await expect(page.getByText('系统拒绝暂停测试应用', { exact: true })).toBeVisible();await expect(page.getByText('已接收，等待执行', { exact: true })).toBeVisible();
+});

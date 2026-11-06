@@ -77,3 +77,8 @@ object UsageHistory {
         };return result
     }
 }
+
+object HistoryWindow {
+    fun from(now:Long,bootStartedAt:Long,firstObservedAt:Long,cursor:Long)=maxOf(cursor,bootStartedAt,firstObservedAt,now-7*86400000L)
+    fun overlap(from:Long,bootStartedAt:Long,firstObservedAt:Long)=maxOf(from-6*3600000L,bootStartedAt,firstObservedAt)
+}

@@ -57,7 +57,7 @@ class UsageRepository(context:Context,databaseName:String="remote.db"):SQLiteOpe
             val transition=UsageMachine.reduce(state,UsageEvent(kind,wall,elapsed,bootKey,bootId,available,interactive))
             transition.changed.forEach { session(db,it) }
             val bootAt=if(newBoot) (wall-elapsed).coerceAtLeast(0) else previous!!.getLong("bootStartedAtMs")
-            val next=JSONObject().put("bootKey",bootKey).put("bootId",bootId).put("bootStartedAtMs",bootAt).put("wall",wall).put("elapsed",elapsed)
+            val next=JSONObject().put("firstObservedAtMs",previous?.optLong("firstObservedAtMs",previous.getLong("wall")) ?: wall).put("bootKey",bootKey).put("bootId",bootId).put("bootStartedAtMs",bootAt).put("wall",wall).put("elapsed",elapsed)
                 .put("interactive",transition.state.interactive ?: JSONObject.NULL).put("fingerprint",transition.state.fingerprint)
                 .put("active",transition.state.active?.let { UsageCodec.encode(it).put("startElapsedMs",it.startElapsedMs ?: JSONObject.NULL) } ?: JSONObject.NULL)
             saveMeta(db,"monitor",next);cleanup(db,wall);db.setTransactionSuccessful();return next
@@ -105,15 +105,26 @@ class UsageRepository(context:Context,databaseName:String="remote.db"):SQLiteOpe
             saveMeta(db,"history",JSONObject().put("until",until));db.setTransactionSuccessful()
         } finally { db.endTransaction() }
     }
+    @Synchronized fun associateDevice(deviceId:String):Boolean {
+        require(UUID.fromString(deviceId).toString()==deviceId)
+        val db=writableDatabase;db.beginTransaction()
+        try {
+            if(meta(db,"server")?.optString("deviceId")==deviceId) { db.setTransactionSuccessful();return false }
+            cleanup(db,System.currentTimeMillis());db.execSQL("UPDATE records SET dirty=1")
+            saveMeta(db,"server",JSONObject().put("deviceId",deviceId));db.setTransactionSuccessful();return true
+        } finally { db.endTransaction() }
+    }
     @Synchronized fun pending():JSONObject {
         val result=JSONObject().put("sessions",JSONArray()).put("gaps",JSONArray())
         readableDatabase.rawQuery("SELECT kind,payload FROM records WHERE dirty=1 ORDER BY rowid LIMIT 200",null).use { c -> while(c.moveToNext()) {
             val j=JSONObject(c.getString(1));j.remove("startElapsedMs");result.getJSONArray(c.getString(0)).put(j)
         } };return result
     }
-    @Synchronized fun acknowledge(response:JSONObject) {
+    @Synchronized fun acknowledge(response:JSONObject,deviceId:String) {
         val db=writableDatabase;db.beginTransaction()
-        try { listOf("sessions","gaps").forEach { kind -> val rows=response.getJSONArray(kind);for(i in 0 until rows.length()) {
+        try {
+            if(meta(db,"server")?.optString("deviceId")!=deviceId) return
+            listOf("sessions","gaps").forEach { kind -> val rows=response.getJSONArray(kind);for(i in 0 until rows.length()) {
             val r=rows.getJSONObject(i);db.execSQL("UPDATE records SET dirty=0 WHERE id=? AND kind=? AND version=?",arrayOf(r.getString("id"),kind,r.getInt("recordVersion")))
         } };db.setTransactionSuccessful() } finally { db.endTransaction() }
     }
@@ -125,6 +136,10 @@ class UsageRepository(context:Context,databaseName:String="remote.db"):SQLiteOpe
     @Synchronized fun acknowledgeOperation(id:String,version:Int) {
         val j=operation(id) ?: return
         if(j.getInt("version")==version) saveOperation(j.getString("kind"),j.put("pending",false))
+    }
+    @Synchronized fun retireOrphanedOperation(id:String,version:Int) {
+        val j=operation(id) ?: return
+        if(j.getInt("version")==version) saveOperation(j.getString("kind"),j.put("pending",false).put("receiptDisposition","SERVER_RECEIPT_UNVERIFIABLE"))
     }
     private fun cleanup(db:SQLiteDatabase,wall:Long) {
         val cutoff=java.time.Instant.ofEpochMilli(wall).atZone(ZoneId.of("Asia/Shanghai")).toLocalDate().minusDays(90).atStartOfDay(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli()

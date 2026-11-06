@@ -27,4 +27,12 @@ class RemoteConfigTest {
         json.getJSONObject("config").getJSONArray("schedule").getJSONObject(0).put("startMinute",4294967296L)
         RemoteCodec.snapshot(json)
     }
+    @Test fun acknowledgedConfigurationIsStillComparedWhenTheServerRecoversAnOlderSnapshot() {
+        val stamp=SyncStamp(java.util.UUID.randomUUID().toString(),1000,"CALIBRATED","LOCAL",2,false)
+        val state=ManagerState(initialized=true,remote=stamp)
+        val request=RemoteCodec.syncRequest(state)
+        assertFalse("重连不能仅依靠pending决定是否提供本机候选",request.isNull("candidate"))
+        assertEquals(stamp.mutationId,request.getJSONObject("candidate").getString("mutationId"))
+        assertEquals(1000L,request.getJSONObject("candidate").getLong("modifiedAtMs"))
+    }
 }

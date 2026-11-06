@@ -62,7 +62,7 @@ class RemoteManager(
         catch(e:Exception) { report("网络状态监听不可用") }
         run.launch {
             combine(coordinator.snapshots,coordinator.errors) { state,error ->
-                listOf(state?.revision,state?.lastEvaluation,state?.lastEvaluationRevision,state?.alarmStatus,state?.remote?.pending,error)
+                remoteSyncSignal(state,error)
             }.distinctUntilChanged().collect { signals.trySend(Unit) }
         }
         run.launch { worker(generation) }
@@ -86,13 +86,14 @@ class RemoteManager(
                 coordinator.syncState()
                 var identity=identities.read()
                 if(identity.token.isEmpty()) identity=api.register(identities)
+                if(usage.associateDevice(identity.deviceId)) catalogHash=""
                 currentCoroutineContext().ensureActive()
                 mutable.update { it.copy(deviceId=identity.deviceId,phase="同步中",error="") }
                 val sent=SystemClock.elapsedRealtime()
                 val time=api.request("/api/v1/device/time",identity.token)
                 clock.calibrate(time.getLong("nowMs"),sent,SystemClock.elapsedRealtime())
                 val local=coordinator.syncState()
-                val response=api.request("/api/v1/device/sync",identity.token,JSONObject().put("candidate",if(local.remote?.pending==true) RemoteCodec.candidate(local) else JSONObject.NULL))
+                val response=api.request("/api/v1/device/sync",identity.token,RemoteCodec.syncRequest(local))
                 currentCoroutineContext().ensureActive()
                 if(!response.isNull("current") && coordinator.acceptRemote(RemoteCodec.snapshot(response.getJSONObject("current")))) applyPolicy()
                 val current=coordinator.refresh()
@@ -106,7 +107,11 @@ class RemoteManager(
                 val receipts=usage.operations("reboot",true)
                 if(receipts.isNotEmpty()) {
                     val rows=org.json.JSONArray(receipts.map { JSONObject().put("id",it.getString("id")).put("version",it.getInt("version")).put("state",it.getString("state")).put("result",it.getString("result")) })
-                    val ack=api.request("/api/v1/device/commands/receipts",identity.token,JSONObject().put("receipts",rows)).getJSONArray("accepted")
+                    val response=api.request("/api/v1/device/commands/receipts",identity.token,JSONObject().put("receipts",rows))
+                    val ack=response.getJSONArray("accepted")
+                    val orphaned=response.optJSONArray("orphaned") ?: org.json.JSONArray()
+                    for(index in 0 until orphaned.length()) { val row=orphaned.getJSONObject(index);usage.retireOrphanedOperation(row.getString("id"),row.getInt("version")) }
+                    if(orphaned.length()>0) audit.append(AuditEvent(LogCategory.PERMISSION_ERROR,"远程重启回执","服务器无法核验旧任务或执行许可；保留本机操作记录，不重复执行"))
                     for(index in 0 until ack.length()) { val row=ack.getJSONObject(index);usage.acknowledgeOperation(row.getString("id"),row.getInt("version")) }
                     if(receipts.size==200) signals.trySend(Unit)
                 }
@@ -123,7 +128,7 @@ class RemoteManager(
                     val batch=usage.pending()
                     if(batch.getJSONArray("sessions").length()+batch.getJSONArray("gaps").length()==0) break
                     run {
-                        usage.acknowledge(api.request("/api/v1/device/usage",identity.token,batch))
+                        usage.acknowledge(api.request("/api/v1/device/usage",identity.token,batch),identity.deviceId)
                         if(batchIndex==19) signals.trySend(Unit)
                     }
                 }

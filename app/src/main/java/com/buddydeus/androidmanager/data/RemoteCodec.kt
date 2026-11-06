@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object RemoteCodec {
+    fun syncRequest(s:ManagerState):JSONObject { check(s.initialized) { "请先完成本机初始化" };return JSONObject().put("candidate",candidate(s)) }
     fun stamp(s:SyncStamp)=JSONObject().put("mutationId",s.mutationId).put("modifiedAtMs",s.modifiedAtMs).put("timeQuality",s.timeQuality).put("origin",s.origin)
     fun readStamp(j:JSONObject)=SyncStamp(j.getString("mutationId"),integer(j,"modifiedAtMs"),j.getString("timeQuality"),j.getString("origin"))
     fun candidate(s:ManagerState):JSONObject {

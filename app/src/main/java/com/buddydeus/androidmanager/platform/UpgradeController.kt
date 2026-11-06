@@ -173,7 +173,11 @@ class UpgradeController(private val context:Context,private val store:UsageRepos
         if(pending.isEmpty()) return
         val rows=JSONArray(pending.map { row -> JSONObject().put("id",row.getString("id")).put("version",row.getInt("version")).put("state",row.getString("state")).put("result",row.getString("result"))
             .put("installedVersion",row.opt("installedVersion") ?: JSONObject.NULL).put("installedSigners",row.optJSONArray("installedSigners") ?: JSONArray()) })
-        val accepted=api.request("/api/v1/device/upgrades/receipts",token,JSONObject().put("receipts",rows)).getJSONArray("accepted")
+        val response=api.request("/api/v1/device/upgrades/receipts",token,JSONObject().put("receipts",rows))
+        val accepted=response.getJSONArray("accepted")
+        val orphaned=response.optJSONArray("orphaned") ?: JSONArray()
+        for(i in 0 until orphaned.length()) { val row=orphaned.getJSONObject(i);store.retireOrphanedOperation(row.getString("id"),row.getInt("version")) }
+        if(orphaned.length()>0) coordinator.reportFailure("远程升级回执","服务器无法核验旧任务或执行许可；保留本机操作记录，继续接收其他任务")
         for(i in 0 until accepted.length()) { val row=accepted.getJSONObject(i);store.acknowledgeOperation(row.getString("id"),row.getInt("version")) }
     }
     private fun abandon(sessionId:Int) { try { abandonSession(sessionId) } catch(e:Exception) { coordinator.reportFailure("远程升级","无法清理安装会话") } }

@@ -88,17 +88,19 @@ export async function releaseRoutes(app: FastifyInstance, ctx: Context, director
   });
   app.post('/api/v1/device/upgrades/receipts', request => {
     const device = requireDevice(ctx, request); const rows = z.object({ receipts: z.array(receiptSchema).max(200) }).strict().parse(request.body).receipts;
+    const accepted: { id: string; version: number }[] = [];const orphaned: { id: string; version: number }[] = [];
     ctx.store.transaction(() => { for (const receipt of rows) {
       const key = `${device.id}:${receipt.id}`; const job = ctx.store.get('upgrade_jobs', key, jobSchema);
-      if (!job) throw new ApiError(404, 'JOB_NOT_FOUND', '升级任务不存在');
+      if (!job) { orphaned.push({ id: receipt.id, version: receipt.version });continue; }
       if (receipt.state === 'SUCCEEDED' && (receipt.installedVersion !== job.release.versionCode || JSON.stringify([...receipt.installedSigners ?? []].sort()) !== JSON.stringify(job.release.signers))) throw new ApiError(400, 'INSTALLED_EVIDENCE_REQUIRED', '实际安装版本或签名与目标不符');
       if (receipt.version === job.receiptVersion && JSON.stringify(receipt) !== JSON.stringify(job.receipt)) throw new ApiError(409, 'RECEIPT_REUSE', '回执版本内容不一致');
       if (receipt.version > job.receiptVersion) {
         if (terminal.includes(job.state) && receipt.state !== job.state) throw new ApiError(409, 'JOB_TERMINAL', '升级任务已结束');
         ctx.store.put('upgrade_jobs', key, device.id, { ...job, state: receipt.state, result: receipt.result, receiptVersion: receipt.version, receipt });
       }
+      accepted.push({ id: receipt.id, version: receipt.version });
     } });
-    return { data: { accepted: rows.map(r => ({ id: r.id, version: r.version })) } };
+    return { data: { accepted, orphaned } };
   });
   app.get('/api/v1/device/releases/:id/apk', async (request, reply) => {
     const device = requireDevice(ctx, request); const { id } = z.object({ id: hashSchema }).parse(request.params);

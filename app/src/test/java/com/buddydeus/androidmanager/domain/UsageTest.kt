@@ -49,4 +49,9 @@ class UsageTest {
         assertEquals(1,records.size);assertEquals(UsageQuality.MISSING_START,records.single().quality)
         assertNull(records.single().startedAtMs);assertNull(records.single().durationMs)
     }
+    @Test fun historyAndItsOverlapNeverQueryBeforeMonitoringBegan() {
+        assertEquals(9000L,HistoryWindow.from(10000,0,9000,0))
+        assertEquals(9000L,HistoryWindow.overlap(10000,0,9000))
+        assertEquals(3*86400000L,HistoryWindow.from(10*86400000L,0,0,0))
+    }
 }

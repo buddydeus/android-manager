@@ -112,7 +112,21 @@ class ManagerInterfaceTest {
         rule.setContent { ManagerContent(fixture(), ManagerActions()) }
         tab("时间表")
         rule.onNodeWithContentDescription("周一结束时间 23:59").performClick()
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        fun focusedWindow(dialog:Boolean):Boolean {
+            var ready=false
+            instrumentation.runOnMainSync {
+                val activity=rule.activity.window.decorView
+                val modal=android.view.inspector.WindowInspector.getGlobalWindowViews().any { it!==activity && it.isShown && it.hasWindowFocus() }
+                ready=if(dialog) modal else activity.hasWindowFocus() && !modal
+            }
+            return ready
+        }
+        rule.waitForIdle()
+        rule.waitUntil(5000) { focusedWindow(true) }
+        instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        rule.waitUntil(5000) { focusedWindow(false) }
+        rule.waitForIdle()
         rule.onNodeWithText("有未保存的修改").assertDoesNotExist()
         rule.onNodeWithText("周一全天（已选择）").assertExists()
     }

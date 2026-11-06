@@ -90,4 +90,6 @@ docker compose exec -e AMS_BACKUP_DIR=/data/backups ams node dist/api/src/backup
 docker compose cp ams:/data/backups ./backups
 ```
 
-转存到独立受保护介质，并单独安全备份部署 `.env` 与签名材料。备份含账号校验值和设备凭据摘要，勿公开。恢复时停止服务，将完整快照（数据库、releases目录、backup.json）放入**新建本机卷**并确保UID1000可读写，保留原卷，完成健康与登录检查后切换；部署秘密须配套恢复。旧重启命令没有内存执行许可，不会重放。不要删除未知版本的数据库来“修复”启动。
+转存到独立受保护介质，并单独安全备份部署 `.env` 与签名材料。备份含账号校验值和设备凭据摘要，勿公开。恢复时停止服务，将完整快照（数据库、releases目录、backup.json）放入**新建本机卷**并确保UID1000可读写，保留原卷，完成健康与登录检查后切换；部署秘密须配套恢复。设备重连会重新提交本机完整配置候选；新设备身份会重新上传保留期内统计及目录。旧重启命令没有内存执行许可，不会重放。恢复后缺失任务，或重启回执缺少服务端许可证据时，回执接口分项返回`orphaned`（id/version），其余正常项返回`accepted`；手机保留原始操作记录并标记不可核验，匹配版本后停止补传，继续其他同步。不要删除未知版本的数据库来“修复”启动。
+
+隔离Android联调入口为`tests/android-server.ts`，只监听127.0.0.1:8443，须显式提供权限600的`AMS_ANDROID_FIXTURE` JSON（随机fixtureId/enrollmentKey/adminPassword）及同目录tls/server.key、tls/server.pem；数据仅写入该目录的server-data。该入口不进入运行镜像。Android测试CA仅debug可用，须通过显式UUID和指纹夹具安装；不得将测试地址、CA、凭据或数据库用于生产。实际验收范围见[设备验证](../docs/device-validation.md)。

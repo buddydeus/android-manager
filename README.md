@@ -1,6 +1,6 @@
 # Android 应用管控
 
-Android 11+ Device Owner 应用。既有本机需求见 [requirement](docs/requirement.md)，技术契约见 [proposal](docs/proposal.md)，设备验证见 [device-validation](docs/device-validation.md)。已批准的[远程管理扩展](docs/DR-20261105-remote-management/requirement.md)与[技术方案](docs/DR-20261105-remote-management/proposal.md)正在分环节实现，不表示已部署服务器或完成设备验收。
+Android 11+ Device Owner 应用。既有本机需求见 [requirement](docs/requirement.md)，技术契约见 [proposal](docs/proposal.md)，设备验证见 [device-validation](docs/device-validation.md)。已批准的[远程管理扩展](docs/DR-20261105-remote-management/requirement.md)与[技术方案](docs/DR-20261105-remote-management/proposal.md)已实现并完成隔离模拟器联调，尚未部署生产服务器或完成目标实机验收。
 
 ```text
 管理入口 → 密码验证 → 黑名单 / 共用周时间表 / 总开关 / 设置 / 分类日志
@@ -15,7 +15,7 @@ Android 11+ Device Owner 应用。既有本机需求见 [requirement](docs/requi
 
 远程服务和Vue网页位于 [server](server/README.md)，使用Node24、TypeScript6与本机SQLite。已实现自动接入、配置同步/推送、应用目录、使用统计、APK升级及仅在线整机重启；[网页实际截图](designs/validation/remote-console/README.md)与[部署说明](server/README.md)可供检查。当前不表示已部署到线上或完成实机验收。
 
-远程接入在本机初始化完成后启动，独立于本机登录和管控总开关。受控 APK 构建前设置 `AMS_ENROLLMENT_KEY`，与服务端接入凭据一致；缺少凭据时显示待同步，本地管控继续。服务器固定为 `https://ams.opt.work`，仅 debug 构建可用 `AMS_TEST_ORIGIN` 指定隔离 HTTPS 测试原点。设置页显示连接与同步状态，不提供更换地址或解绑入口。
+远程接入在本机初始化完成后启动，独立于本机登录和管控总开关。受控 APK 构建前设置 `AMS_ENROLLMENT_KEY`，与服务端接入凭据一致；缺少凭据时显示待同步，本地管控继续。服务器固定为 `https://ams.opt.work`，仅 debug 构建可用 `AMS_TEST_ORIGIN` 指定隔离 HTTPS 测试原点。设置页显示连接与同步状态，不提供更换地址或解绑入口。调试构建可在显式隔离模拟器夹具中信任测试用户CA；Release仅信任系统CA，不包含该调试配置。
 
 使用统计从解锁至息屏，离线暂存并补传，保留90天。设置页可选授权“使用情况访问权”补查系统有限历史；不上传其他应用的使用行为。缺失事件保留不完整标记，完整会话按上海日期分摊合计。最近系统启动时间为墙钟减系统运行时长的估算，不是应用启动时间。服务重建及时间跳变可能保留无法补齐的缺口，仍需设备验证。
 
@@ -58,8 +58,8 @@ adb -s SERIAL shell dpm set-device-owner com.buddydeus.androidmanager/.platform.
 
 ## 验证状态
 
-本轮63项单元测试、Lint、Debug和Release构建通过；既有13项模拟器界面测试尚待本轮重跑。使用记录与远程命令共7项模拟器存储测试通过（命令测试使用替代系统调用，不重启设备）；远程全链路联调仍待执行。简洁界面实际截图见 [界面验证](designs/validation/minimal/)。OPPO PKD130 / Android 15 已完成基础存储、应用目录、初始化入口与 SAF 查询验证，以及显式应用和后台边界探针。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化、恢复及重启应用登录检查。
+本轮67项单元测试、Lint、Debug和Release构建通过；13项独立界面测试已重跑通过。隔离模拟器已完成真实初始化、双向配置、应用目录变化、实际暂停/隐藏和解除、使用记录、旧备份恢复及自动升级；详细证据与限制见设备验证文档。简洁界面实际截图见 [界面验证](designs/validation/minimal/)。OPPO PKD130 / Android 15 已完成基础存储、应用目录、初始化入口与 SAF 查询验证，以及显式应用和后台边界探针。独立 Android 16 模拟器通过真实暂停、隐藏、边界解除和关闭状态清理测试，并完成密码目录初始化、恢复及重启应用登录检查。
 
 OPPO 账户已由管理员移除，重新安装 APK 后 Device Owner 注册成功；实机小红书暂停、隐藏及恢复探针通过；系统市场可暂停，但 ColorOS 明确禁止隐藏，因此市场完整效果未通过。锁屏深度待机下可自动解除，但实测比边界晚约118秒，即时性不通过。通知展示等验收仍未完成，不能宣称此 ROM 完整兼容。临时黑名单和周表已清空，小红书恢复可用，总开关保留开启。实机空规则、开启状态的重启恢复通过；USB 连接通过不等于管控验收通过。
 
-升级只接受本应用的单APK，服务端用固定36.0.0构建工具验签并提取版本，手机复核摘要、大小、签名及系统兼容性后自动安装。提交安装不代表成功；目标版本与签名实际安装后才成功，系统要求现场确认则失败。离线任务等待设备恢复，未知结果不重复提交。当前真实自动安装仍待隔离模拟器与实机联调。
+升级只接受本应用的单APK，服务端用固定36.0.0构建工具验签并提取版本，手机复核摘要、大小、签名及系统兼容性后自动安装。提交安装不代表成功；目标版本与签名实际安装后才成功，系统要求现场确认则失败。离线任务等待设备恢复，未知结果不重复提交。隔离Android 16模拟器已完成两次实际自动安装并核对目标版本/签名；目标实机仍待验证。

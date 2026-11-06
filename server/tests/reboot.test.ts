@@ -56,3 +56,22 @@ test('permit deadline uses elapsed time and later boot is only reported as obser
     assert.equal(rows[0].state, 'OBSERVED_LATER_BOOT');
   } finally { ws.terminate(); }
 });
+test('restored server retires unknown command receipts and accepts other receipts in the same batch', async t => {
+  const f = await fixture(t);const d = await f.register();const admin = await f.admin();const ws = await f.app.injectWS('/api/v1/device/channel', { headers: { authorization: `Bearer ${d.token}` } });
+  try {
+    const p = message(ws, 'heartbeat.ack');ws.send(JSON.stringify({ type: 'heartbeat', bootId: 7 }));await p;
+    const id = randomUUID();const missing = randomUUID();await f.app.inject({ method: 'POST', url: `/api/v1/admin/devices/${d.deviceId}/reboot`, headers: admin, payload: { commandId: id, confirmed: true } });
+    const response = await f.app.inject({ method: 'POST', url: '/api/v1/device/commands/receipts', headers: { authorization: `Bearer ${d.token}` }, payload: { receipts: [{ id: missing, version: 2, state: 'ATTEMPTED', result: 'old attempt' }, { id, version: 1, state: 'ACCEPTED', result: 'received' }] } });
+    assert.equal(response.statusCode, 200);assert.deepEqual(response.json().data, { accepted: [{ id, version: 1 }], orphaned: [{ id: missing, version: 2 }] });
+  } finally { ws.terminate(); }
+});
+test('restored command without retained permit evidence cannot poison the receipt batch', async t => {
+  const f = await fixture(t);const d = await f.register();const admin = await f.admin();const ws = await f.app.injectWS('/api/v1/device/channel', { headers: { authorization: `Bearer ${d.token}` } });
+  try {
+    const p = message(ws, 'heartbeat.ack');ws.send(JSON.stringify({ type: 'heartbeat', bootId: 7 }));await p;
+    const id = randomUUID();await f.app.inject({ method: 'POST', url: `/api/v1/admin/devices/${d.deviceId}/reboot`, headers: admin, payload: { commandId: id, confirmed: true } });
+    const response = await f.app.inject({ method: 'POST', url: '/api/v1/device/commands/receipts', headers: { authorization: `Bearer ${d.token}` }, payload: { receipts: [{ id, version: 2, state: 'ATTEMPTED', result: 'permit was issued after backup' }] } });
+    assert.equal(response.statusCode, 200);assert.deepEqual(response.json().data, { accepted: [], orphaned: [{ id, version: 2 }] });
+    const rows = (await f.app.inject({ url: `/api/v1/admin/devices/${d.deviceId}/commands`, headers: admin })).json().data;assert.notEqual(rows[0].state, 'ATTEMPTED');
+  } finally { ws.terminate(); }
+});

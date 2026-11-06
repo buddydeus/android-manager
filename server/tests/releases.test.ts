@@ -31,3 +31,9 @@ test('queued upgrades are scoped, idempotent and success needs the installed tar
   assert.equal((await report(1)).statusCode, 400); assert.equal((await report(2)).statusCode, 200);
   assert.equal((await f.app.inject({ url: '/api/v1/device/upgrades', headers })).json().data.jobs.length, 0);
 });
+test('receipts absent after a backup restore are retired separately without blocking valid upgrades', async t => {
+  const f = await fixture(t);const d = await f.register();const headers = { authorization: `Bearer ${d.token}` };const id = randomUUID();
+  const result = await f.app.inject({ method: 'POST', url: '/api/v1/device/upgrades/receipts', headers, payload: { receipts: [{ id, version: 3, state: 'FAILED', result: 'old task' }] } });
+  assert.equal(result.statusCode, 200);assert.deepEqual(result.json().data, { accepted: [], orphaned: [{ id, version: 3 }] });
+  assert.equal((await f.app.inject({ url: '/api/v1/device/upgrades', headers })).statusCode, 200);
+});

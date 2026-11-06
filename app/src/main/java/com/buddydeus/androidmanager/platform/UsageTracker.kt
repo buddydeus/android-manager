@@ -54,11 +54,11 @@ class UsageTracker(private val context:Context,val repository:UsageRepository,pr
         if(!ready() || !hasAccess() || !context.getSystemService(UserManager::class.java).isUserUnlocked) return
         val monitor=repository.monitor() ?: return
         // A persisted cursor limits work. Query a short overlap so a pair crossing a batch can be matched.
-        val until=System.currentTimeMillis();var from=repository.historyCursor().coerceAtLeast(maxOf(monitor.getLong("bootStartedAtMs"),until-7*86400000L))
+        val until=System.currentTimeMillis();var from=HistoryWindow.from(until,monitor.getLong("bootStartedAtMs"),monitor.optLong("firstObservedAtMs",monitor.getLong("wall")),repository.historyCursor())
         repeat(28) {
             if(from>=until) return
             val end=minOf(from+6*3600000L,until)
-            val query=context.getSystemService(UsageStatsManager::class.java).queryEvents((from-6*3600000L).coerceAtLeast(monitor.getLong("bootStartedAtMs")),end) ?: return
+            val query=context.getSystemService(UsageStatsManager::class.java).queryEvents(HistoryWindow.overlap(from,monitor.getLong("bootStartedAtMs"),monitor.optLong("firstObservedAtMs",monitor.getLong("wall"))),end) ?: return
             val filtered=mutableListOf<ScreenHistoryEvent>();val event=UsageEvents.Event();var count=0
             while(query.hasNextEvent()) {
                 query.getNextEvent(event);if(++count>200_000) error("历史事件过多，保留覆盖缺失")
