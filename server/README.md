@@ -1,13 +1,18 @@
-# AMS 远程服务
+# AMS 远程管理
 
-Node 24，Fastify + TypeScript + SQLite。需求与完整方案见 [远程管理扩展](../docs/DR-20261105-remote-management/requirement.md)。当前提供管理员会话、设备挑战注册、双向配置比较、WSS推送和设备状态上报，已接入Android端；提供使用记录/缺口的版本化补传、上海日期合计及分页应用目录；在线重启仅经当前WSS短时一次许可执行，不进入离线队列；已提供流式APK发布、固定工具校验、鉴权下载与升级任务/版本回执；网页在后续环节完成。
+Node 24.22.2、Fastify、TypeScript 6、Vue 3 与本机 SQLite。需求和技术契约见 [远程扩展](../docs/DR-20261105-remote-management/requirement.md)及[方案](../docs/DR-20261105-remote-management/proposal.md)。浏览器与设备使用独立身份；网页没有本机密码文件、远程 shell 或退管入口。
 
 ```text
-设备接入凭据 → 一次性挑战及设备签名 → 独立设备 token → 配置同步
-网页管理员 → 登录 Cookie + CSRF → 管理配置
+浏览器 ─ HTTPS ─ Caddy ─ Fastify ─ 本机 SQLite / APK对象
+                           │
+                         HTTPS / WSS
+                           │
+                    初始化完成的 Android
 ```
 
-## 验证与本地启动
+提供设备自动注册、双向整份配置按修改时间比较、应用目录、90天使用会话/缺口和上海日期合计、APK发布/排队升级，以及仅在线的一次重启许可。网页保存、设备接收和策略执行分别展示。运行时间取系统启动估算；使用从解锁至息屏，缺端点不伪造时长。真实安装、重启和OEM后台效果的实际验收范围见 [设备证据](../docs/device-validation.md)。
+
+## 开发与验证
 
 ```sh
 npm ci
@@ -16,23 +21,73 @@ npm run typecheck
 npm run build
 ```
 
-先在受控终端设置以下环境变量，勿将真实值保存到仓库：
+`typecheck` 同时运行服务端 tsc 与 Vue 的 vue-tsc；Vite只负责打包。锁定TypeScript 6是因为当前vue-tsc不兼容TypeScript 7原生编译器接口。只批准固定版本better-sqlite3安装脚本；可选fsevents不执行脚本。
 
-- `AMS_DATA_DIR`：数据库目录的绝对路径，须放本机磁盘。
-- `AMS_ENROLLMENT_KEY`：至少32字符的随机接入凭据，和受控 APK 构建配置一致。
-- `AMS_ADMIN_USER`、`AMS_ADMIN_PASSWORD`：初次管理员账号和至少12字符的密码，仅初始化时需要。
-- `AMS_ORIGIN`：默认 `https://ams.opt.work`；开发及测试必须使用隔离的 HTTPS 原点。
-- `PORT`：默认8080，生产须经 TLS 代理访问。
+实际APK工具集成用例需显式指定本应用已签名且versionCode>1的APK；未提供时该用例会明确跳过：
 
 ```sh
-npm run admin
-npm start
+AMS_TEST_APK=/absolute/path/update.apk \
+AMS_TEST_BUILD_TOOLS=/absolute/path/Android/sdk/build-tools/36.0.0 npm test
+npx playwright install chromium
+AMS_TEST_APK=/absolute/path/update.apk \
+AMS_TEST_BUILD_TOOLS=/absolute/path/Android/sdk/build-tools/36.0.0 npm run test:browser
 ```
 
-管理员只初始化一次，命令不覆盖已有管理员。启动和构建不自动创建账号。Cookie 仅经 HTTPS 使用，不能用裸 HTTP 网页登录验证代替 TLS 部署。`/health/live` 和 `/health/ready` 分别检查服务存活及数据库可读。
+浏览器测试启动独立回环HTTPS服务，使用临时数据库、临时证书与随机账号，不读取生产数据。测试设备是协议夹具，不能证明Android系统能力。桌面和窄屏截图见 [网页验证](../designs/validation/remote-console/README.md)。
 
-同步接口仅接受完整 `candidate`（变更ID、实际保存时间、时间质量、来源、三项配置）；相同时间保留服务器版本。重传旧候选会返回当前服务端快照。网页保存配置须携带稳定 UUID `x-mutation-id`；请求重试复用同一ID，新的保存操作才生成新ID。固定服务器地址不代替身份验证，注册凭据可从 APK 提取的边界仍适用。
+## Linux Docker 部署
 
-设备WSS端点 `/api/v1/device/channel` 通过 Authorization 验证后建立当前连接；30秒心跳、90秒失联判离线，服务重启不恢复旧在线状态。推送只通知配置有变；设备通过HTTPS双向同步取得当前结果。`/device/status` 上报版本及带配置版本的执行摘要，不能把连接在线当作管控成功。
+固定外网地址为 `https://ams.opt.work`。先将DNS指向服务器并放通80/443；本期使用linux/amd64镜像（ARM主机须支持Docker对应平台模拟）。Docker官方镜像通过其AWS公开分发源获取，Node与Caddy均固定摘要。Android build-tools固定36.0.0，下载校验SHA-256。
 
-APK工具固定为 Android build-tools 36.0.0。部署路径默认 `/opt/android-sdk/build-tools/36.0.0`，本地验证可设置 `AMS_BUILD_TOOLS`。APK最大100MiB，只接收管理员同源上传，不接受下载URL；哈希与元数据由文件计算。实际工具集成测试：设置 `AMS_TEST_APK`（本应用已签名、versionCode>1）与 `AMS_TEST_BUILD_TOOLS` 后执行 `npm test`；未设置时该集成用例明确跳过。
+在本目录生成独立部署凭据，勿提交该文件：
+
+```sh
+umask 077
+printf 'AMS_ENROLLMENT_KEY=%s\n' "$(openssl rand -hex 32)" > .env
+docker compose build
+```
+
+正式APK构建环境必须设置与 `.env` 一致的 `AMS_ENROLLMENT_KEY`。App不允许更换服务器地址或本机解绑。APK中共享接入凭据可被提取，不能充当硬件认证；正常连接使用每台设备的独立token，服务端只存摘要。
+
+创建唯一管理员（密码至少12字符，不等于手机管理密码）：
+
+```sh
+read -r -p '管理员账号: ' AMS_ADMIN_USER
+read -r -s -p '管理员密码: ' AMS_ADMIN_PASSWORD
+export AMS_ADMIN_USER AMS_ADMIN_PASSWORD
+docker compose run --rm -e AMS_ADMIN_USER -e AMS_ADMIN_PASSWORD ams node dist/api/src/admin-cli.js
+unset AMS_ADMIN_USER AMS_ADMIN_PASSWORD
+docker compose up -d
+docker compose ps
+```
+
+重复初始化管理员会拒绝，不覆盖现有账号。Caddy自动提供HTTPS与WSS反向代理；AMS容器不对公网直接开放8080，应用以UID1000运行。私有网络为 `172.30.90.0/24`，只信任Caddy的 `172.30.90.3/32` 转发地址；若与现有网络冲突，须同时调整compose网络、Caddy地址与AMS_TRUST_PROXY。生产不要使用浏览器测试服务。
+
+部署材料、注册凭据、签名私钥及本地数据库均不得提交Git。网页会话为Secure/HttpOnly/SameSite=Strict cookie，空闲30分钟、最长12小时；写操作校验同源和CSRF。客户端包不包含管理员或设备token。
+
+## APK发布与正式分发
+
+管理员在网页上传单APK，最大100MiB。服务端通过固定 `apksigner verify` 和 `aapt2 dump badging` 校验包名、版本、minSdk及证书集合；不接受任意下载URL。对象按SHA-256寻址，只向已分配该版本的鉴权设备下载。
+
+手机再次检查摘要、大小、包名、兼容性、递增版本与相同签名。只有现装版本和签名与目标一致才报告成功；系统要求现场确认视为无法自动安装，未知结果不重复commit。离线任务等待重连。首版不支持签名轮换、降级或拆分安装包集。
+
+根目录执行 `./gradlew :app:assembleDistribution`。必需外部环境值：`AMS_ENROLLMENT_KEY`、`AMS_KEYSTORE`、`AMS_KEYSTORE_PASSWORD`、`AMS_KEY_ALIAS`、`AMS_KEY_PASSWORD`；版本用 `AMS_VERSION_CODE` 和 `AMS_VERSION_NAME`。签名须匹配现装版本，不自动生成生产身份。普通 `assembleRelease` 可产生仅供检查的未签名包，不能用于正式分发。
+
+## 状态与命令
+
+配置只包含黑名单、周时间表和总开关。首次接入先上传本机基线；同一时间保留服务器版本，离线重启后的估算时钟存在精度限制。网页草稿不会因后台刷新被静默覆盖；响应丢失重试沿用同一变更编号。
+
+重启仅允许当前WSS会话且心跳有效的设备。网页二次确认后，手机在同一连接请求10秒内的一次许可，持久保存ATTEMPTED后才调用DPM。断线不排队、不重放；“已观察到后续启动”不证明该命令是重启的唯一原因。服务重启后重新建立在线会话，不沿用数据库里的上次在线状态。
+
+## 存储与备份
+
+SQLite WAL只用单实例、本机持久卷 `ams_data`，禁止水平扩容或放在网络共享盘。未知存储版本或损坏会报错停止，不清库恢复。APK对象与数据库一起保留；不要单独复制运行中主数据库文件。
+
+一致性备份命令使用SQLite备份接口，按快照引用复制并核对每个不可变APK：
+
+```sh
+docker compose exec -e AMS_BACKUP_DIR=/data/backups ams node dist/api/src/backup-cli.js
+docker compose cp ams:/data/backups ./backups
+```
+
+转存到独立受保护介质，并单独安全备份部署 `.env` 与签名材料。备份含账号校验值和设备凭据摘要，勿公开。恢复时停止服务，将完整快照（数据库、releases目录、backup.json）放入**新建本机卷**并确保UID1000可读写，保留原卷，完成健康与登录检查后切换；部署秘密须配套恢复。旧重启命令没有内存执行许可，不会重放。不要删除未知版本的数据库来“修复”启动。

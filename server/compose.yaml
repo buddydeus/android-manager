@@ -1,0 +1,38 @@
+services:
+  ams:
+    platform: linux/amd64
+    build: .
+    restart: unless-stopped
+    environment:
+      AMS_ENROLLMENT_KEY: ${AMS_ENROLLMENT_KEY:?请先配置接入凭据}
+      AMS_ORIGIN: https://ams.opt.work
+      AMS_TRUST_PROXY: 172.30.90.3/32
+    volumes:
+      - ams_data:/data
+    networks: [management]
+    deploy:
+      replicas: 1
+    security_opt: [no-new-privileges:true]
+  caddy:
+    image: public.ecr.aws/docker/library/caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      management:
+        ipv4_address: 172.30.90.3
+    depends_on:
+      ams:
+        condition: service_healthy
+networks:
+  management:
+    ipam:
+      config:
+        - subnet: 172.30.90.0/24
+volumes:
+  ams_data:
+  caddy_data:
+  caddy_config:

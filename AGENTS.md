@@ -9,7 +9,7 @@
 
 ## 验证命令
 
-- server 使用 Node24；在 server/ 运行 `npm test && npm run typecheck && npm run build`。npm锁文件固定依赖；SQLite仅单实例本机卷，未知存储版本禁止清库恢复。凭据、签名和本地数据不入库。
+- server 使用Node24、TypeScript6（vue-tsc兼容）与Vue3；在server/运行 `npm test && npm run typecheck && npm run build`，网页关键路径用 `npm run test:browser`；实际APK工具用例显式提供AMS_TEST_APK/AMS_TEST_BUILD_TOOLS。npm锁文件固定依赖；SQLite仅单实例本机卷，未知存储版本禁止清库恢复。凭据、签名和本地数据不入库。
 - 远程扩展分环节实施；README 说明实际接入状态，不以 API 通过声称 Android 或实机能力完成。自动注册必须完成既有初始化；设备 token 与网页管理员会话隔离；配置只同步黑名单、周表和总开关。
 - Android 用原子状态同时保存同步字段与待上传元数据；重连先比较本机候选，旧响应不得清除新修改。策略回执携带实际执行版本，不将旧成功标记为新配置结果。服务端在线判定用当前WSS会话及心跳，重启后重新建立。
 
@@ -45,3 +45,5 @@
 - 使用统计只处理屏幕交互/解锁事件；DP SQLite 中先事务保存，再按 ID/版本补传，旧确认不得清除修正记录。缺端点不补造时长，历史只修复同启动内唯一匹配，空查询保留缺口；合计按上海自然日分摊，保留90天。应用目录分页完整后才切换快照。
 - 重启仅在当前WSS与boot身份匹配且短时一次许可有效时，经PolicyCoordinator串行入口执行；先持久ATTEMPTED再调用DPM，同一ID不重试。回执版本递增，旧ACK不清新状态；断线和调用返回不表示重启成功。SQLite远程存储v1→v2仅新增操作表，不清统计数据。
 - 升级下载不持PolicyCoordinator锁；固定同源对象、大小/摘要/包名/minSdk/递增版本/相同签名均核对后才创建会话。sessionId与INSTALLING原子保存后commit；回调验证jobId/sessionId，实际版本与签名核验后才成功。未知结果不重复提交，现场确认视为无法自动安装。正式分发走assembleDistribution凭据与外部签名门禁。
+
+- 网页采用script setup/类型化props和共享配置契约；仅同源cookie+CSRF，拒绝不可信HTML。后台刷新保留草稿，旧401不得清除新登录；配置重试复用变更ID。Docker为单实例linux/amd64、非root AMS和固定构建工具；备份使用SQLite一致性接口并核对快照引用APK，不单拷WAL主文件。

@@ -7,11 +7,13 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p web/tsconfig.json",
     "build:api": "tsc -p tsconfig.api.json",
-    "build": "npm run build:api",
+    "build": "npm run build:api && npm run build:web",
     "start": "node dist/api/src/main.js",
-    "admin": "node api/src/admin-cli.ts"
+    "admin": "node api/src/admin-cli.ts",
+    "build:web": "vite build --config web/vite.config.ts",
+    "test:browser": "playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.5",
@@ -20,12 +22,21 @@
     "@fastify/websocket": "11.3.7",
     "better-sqlite3": "13.0.3",
     "fastify": "5.12.8",
+    "vue": "3.5.45",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "24.19.2",
     "@types/ws": "8.18.2",
-    "typescript": "7.0.2"
+    "@vitejs/plugin-vue": "6.0.10",
+    "typescript": "6.0.3",
+    "vite": "8.3.6",
+    "vue-tsc": "3.3.14"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "fsevents": false
   }
 }

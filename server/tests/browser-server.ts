@@ -1,0 +1,38 @@
+// Loopback-only, ephemeral fixture. This module is never imported by production.
+import { createServer } from 'node:https';
+import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { createApp } from '../api/src/app.ts';
+import { Store } from '../api/src/db.ts';
+import { provisionAdmin } from '../api/src/auth.ts';
+import { digest } from '../api/src/device.ts';
+const directory = await mkdtemp(join(tmpdir(), 'ams-browser-'));
+const password = randomBytes(24).toString('base64url'); const token = randomBytes(32).toString('base64url');
+const onlineId = randomUUID(); const offlineId = randomUUID();
+provisionAdmin(directory, 'operator', password);
+const store = new Store(directory);
+for (const [id, model] of [[onlineId, '测试手机'], [offlineId, '离线手机']]) {
+  store.put('devices', id, id, { id, installId: randomUUID(), publicKey: 'fixture-public-key', model, apiLevel: 36, versionCode: 1, versionName: '1.0', registeredAt: Date.now(), lastSeenAt: null, status: { bootId: 7, configRevision: 1, policyRevision: 1, policyResult: '尚未核验', alarmStatus: '尚未安排' } });
+  store.put('device_configs', id, id, { mutationId: randomUUID(), modifiedAtMs: Date.now() + (id === offlineId ? 3600000 : 0), origin: 'LOCAL', timeQuality: 'CALIBRATED', serverRevision: 1, config: { enabled: false, blacklist: [], schedule: id === onlineId ? [{ startMinute: 480, endMinute: 540 }, null, null, null, null, null, null] : Array(7).fill(null) } });
+}
+store.put('device_credentials', digest(token), onlineId, { deviceId: onlineId });store.close();
+const origin = 'https://127.0.0.1:8444';
+const app = await createApp({ directory, enrollmentKey: randomBytes(32).toString('hex'), origin, webRoot: join(import.meta.dirname, '../dist/web'), buildTools: process.env.AMS_TEST_BUILD_TOOLS });
+await app.inject({ method: 'POST', url: '/api/v1/device/apps', headers: { authorization: `Bearer ${token}` }, payload: { snapshotId: randomUUID(), page: 0, pages: 1, entries: [{ packageName: 'example.game', label: '测试游戏', installed: true, system: false, protection: '' }, { packageName: 'example.system', label: '<img src=x onerror=alert(1)>', installed: true, system: true, protection: '系统必要应用' }] } });
+const now = Date.now();
+await app.inject({ method: 'POST', url: '/api/v1/device/usage', headers: { authorization: `Bearer ${token}` }, payload: { sessions: [{ id: randomUUID(), recordVersion: 1, bootKey: randomUUID(), bootId: 7, observedAtMs: now - 60000, startedAtMs: now - 60000, endedAtMs: now, durationMs: 60000, quality: 'COMPLETE', source: 'LIVE', clockAdjusted: false }], gaps: [{ id: randomUUID(), recordVersion: 1, startedAtMs: now - 100000, endedAtMs: now - 80000, reason: 'MONITOR_INTERRUPTED', resolved: false }] } });
+const socket = await app.injectWS('/api/v1/device/channel', { headers: { authorization: `Bearer ${token}` } });
+socket.send(JSON.stringify({ type: 'heartbeat', bootId: 7 }));
+const heartbeat = setInterval(() => socket.send(JSON.stringify({ type: 'heartbeat', bootId: 7 })), 30000).unref();
+const key = join(directory, 'key.pem'); const cert = join(directory, 'cert.pem');
+execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-subj', '/CN=localhost', '-days', '1', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdio: 'ignore' });
+await app.ready();
+const server = createServer({ key: await readFile(key), cert: await readFile(cert) }, (req, res) => { app.server.emit('request', req, res); });
+server.on('upgrade', (req, socket, head) => app.server.emit('upgrade', req, socket, head));
+const fixturePath = join(import.meta.dirname, '../node_modules/.cache/ams-browser.json');await mkdir(join(fixturePath, '..'), { recursive: true });
+await writeFile(fixturePath, JSON.stringify({ username: 'operator', password, onlineId, offlineId, apk: process.env.AMS_TEST_APK }), { mode: 0o600 });
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { void (async () => { clearInterval(heartbeat);socket.terminate();await app.close();server.close();await rm(directory, { recursive: true, force: true });await rm(fixturePath, { force: true }); })(); });
+server.listen(8444, '127.0.0.1', () => process.stdout.write('临时网页测试服务就绪\n'));

@@ -6,7 +6,7 @@ import { generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { createApp } from '../api/src/app.ts';
 import { provisionAdmin } from '../api/src/auth.ts';
 
-export async function fixture(t: TestContext, options: { now?: () => number; monotonic?: () => number; buildTools?: string } = {}) {
+export async function fixture(t: TestContext, options: { now?: () => number; monotonic?: () => number; buildTools?: string; webRoot?: string } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'ams-fixture-'));
   const enrollmentKey = randomBytes(32).toString('hex');
   const password = randomBytes(24).toString('base64url');

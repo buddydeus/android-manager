@@ -13,7 +13,7 @@ Android 11+ Device Owner 应用。既有本机需求见 [requirement](docs/requi
 
 ## 构建与调试
 
-远程服务位于 [server](server/README.md)，使用 Node 24。当前接入设备自动注册、管理员会话、Android 双向配置同步、WSS 推送与状态上报；使用记录补传与应用目录已接入；在线重启已接入；自更新已接入；网页仍在实施，当前不表示设备联调已通过。服务端验证：在 `server/` 执行 `npm ci && npm test && npm run typecheck && npm run build`。生产值通过环境注入，勿将接入凭据、管理员密码或签名私钥提交仓库。
+远程服务和Vue网页位于 [server](server/README.md)，使用Node24、TypeScript6与本机SQLite。已实现自动接入、配置同步/推送、应用目录、使用统计、APK升级及仅在线整机重启；[网页实际截图](designs/validation/remote-console/README.md)与[部署说明](server/README.md)可供检查。当前不表示已部署到线上或完成实机验收。
 
 远程接入在本机初始化完成后启动，独立于本机登录和管控总开关。受控 APK 构建前设置 `AMS_ENROLLMENT_KEY`，与服务端接入凭据一致；缺少凭据时显示待同步，本地管控继续。服务器固定为 `https://ams.opt.work`，仅 debug 构建可用 `AMS_TEST_ORIGIN` 指定隔离 HTTPS 测试原点。设置页显示连接与同步状态，不提供更换地址或解绑入口。
 

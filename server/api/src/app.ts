@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 import { releaseRoutes } from './releases.ts';
 import { rebootRoutes } from './reboot.ts';
 import { usageRoutes } from './usage.ts';
@@ -15,10 +16,10 @@ import { adminRoutes } from './admin.ts';
 import websocket from '@fastify/websocket';
 import { RealtimeHub } from './realtime.ts';
 
-export interface AppOptions { directory: string; enrollmentKey: string; origin: string; now?: () => number; monotonic?: () => number; buildTools?: string }
+export interface AppOptions { directory: string; enrollmentKey: string; origin: string; now?: () => number; monotonic?: () => number; buildTools?: string; webRoot?: string; trustProxy?: string[] }
 export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   if (options.enrollmentKey.length < 32 || new URL(options.origin).protocol !== 'https:') throw new Error('Invalid deployment configuration');
-  const app = Fastify({ bodyLimit: 1024 * 1024 });
+  const app = Fastify({ bodyLimit: 1024 * 1024, trustProxy: options.trustProxy ?? false });
   const store = new Store(options.directory);
   const ctx: Context = { store, now: options.now ?? Date.now, monotonic: options.monotonic ?? (() => performance.now()), enrollmentHash: digest(options.enrollmentKey), origin: options.origin, notify: () => false, disconnect: () => {} };
   await app.register(cookie);
@@ -35,6 +36,12 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
     request.log.error({ err: error }, 'Request failed');
     return reply.code(500).send({ errorCode: 'INTERNAL', message: '操作失败，请检查服务状态', requestId: request.id });
   });
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    reply.header('X-Content-Type-Options', 'nosniff');reply.header('Referrer-Policy', 'no-referrer');reply.header('Cache-Control', 'no-store');
+    return payload;
+  });
+  app.setNotFoundHandler((request, reply) => reply.code(404).send({ errorCode: 'NOT_FOUND', message: '页面或接口不存在', requestId: request.id }));
   app.get('/health/live', () => ({ status: 'ok' }));
   app.get('/health/ready', () => { store.db.prepare('SELECT 1').get(); return { status: 'ready' }; });
   deviceRoutes(app, ctx);
@@ -44,5 +51,6 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   catalogRoutes(app, ctx);
   rebootRoutes(app, ctx);
   await releaseRoutes(app, ctx, options.directory, options.buildTools ?? process.env.AMS_BUILD_TOOLS ?? '/opt/android-sdk/build-tools/36.0.0');
+  if (options.webRoot) await app.register(fastifyStatic, { root: options.webRoot, index: ['index.html'] });
   return app;
 }

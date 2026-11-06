@@ -1,0 +1,7 @@
+{
+    admin off
+}
+ams.opt.work {
+    header Strict-Transport-Security "max-age=15552000"
+    reverse_proxy ams:8080
+}

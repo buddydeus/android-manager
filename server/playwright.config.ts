@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({ testDir: './tests/browser', workers: 1, retries: 0, timeout: 30000, expect: { timeout: 5000 }, use: { baseURL: 'https://127.0.0.1:8444', ignoreHTTPSErrors: true }, webServer: { command: `'${process.execPath.replaceAll("'", "'\\''")}' tests/browser-server.ts`, url: 'https://127.0.0.1:8444/health/ready', ignoreHTTPSErrors: true, reuseExistingServer: false }, outputDir: 'test-results' });

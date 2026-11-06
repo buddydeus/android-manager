@@ -123,3 +123,10 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 服务端25项测试全部通过（显式提供实际已签名versionCode=2 APK及36.0.0工具目录，零跳过），包含真实apksigner/aapt2校验、内容寻址发布及鉴权下载字节一致性。
 - `UpgradeInstallerProbeTest` 在独立模拟器显式UUID夹具下通过：实际PackageManager解析同签名递增APK；仅创建会话，模拟创建后中断并清理孤儿；首次abandon异常后下一轮继续清理终态任务引用的会话。未调用commit，未证明静默安装。
 - 与既有使用/命令存储测试合计8项instrumentation通过；63项单测、Lint与Debug/Release构建通过。正式分发缺少接入凭据、或具备临时接入凭据但缺少外部签名时，assembleDistribution均按预期拒绝。
+
+### 同日：网页与容器（协议夹具）
+
+- 28项服务端测试通过，包含真实签名APK工具校验、SQLite一致性备份及旧会话401不清除新登录；tsc/vue-tsc与API/Vue构建通过。
+- 4项浏览器测试通过：真实HTTPS账号会话、配置/既有周表、较新整份配置优先提示、缺口、APK错误与真实发布/排队、重启取消不发送及二次确认发送、离线禁用、390px无整页横向溢出、保存响应丢失重试ID稳定、延迟旧GET不能覆盖新保存。测试设备为协议夹具，不执行DPM。
+- Linux容器构建通过并实际运行：AMS UID1000、健康/网页、Linux36.0.0工具验签发布、分配鉴权下载字节摘要、一致性备份、compose配置与Caddy配置验证均通过。镜像加速源403及Docker Hub超时后，使用Docker官方AWS公开分发镜像并固定摘要；未修改全局Docker设置。
+- 网页[桌面与窄屏实际截图](../designs/validation/remote-console/README.md)已目视检查。未部署到ams.opt.work，未验证生产DNS/TLS、外部签名或ColorOS远程扩展效果。
