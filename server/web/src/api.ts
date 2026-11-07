@@ -6,6 +6,7 @@ export type Current = z.infer<typeof currentSchema>;
 export const appEntry = z.object({ packageName: z.string(), label: z.string(), installed: z.boolean(), system: z.boolean(), protection: z.string() });
 export const appsResult = z.object({ entries: z.array(appEntry), total: z.number(), atMs: z.number().nullable() });
 export const usageResult = z.object({ sessions: z.array(z.object({ id: z.string(), startedAtMs: z.number().nullable(), endedAtMs: z.number().nullable(), durationMs: z.number().nullable(), quality: z.string(), source: z.string(), clockAdjusted: z.boolean() })), gaps: z.array(z.object({ id: z.string(), startedAtMs: z.number(), endedAtMs: z.number(), reason: z.string() })), completeDurationMs: z.number(), incompleteCount: z.number(), activeCount: z.number(), total: z.number() });
+export const usageClearResult = z.object({ date: z.string(), clearedAtMs: z.number() });
 export const releaseView = z.object({ id: z.string(), versionCode: z.number(), versionName: z.string(), minSdk: z.number(), size: z.number(), createdAtMs: z.number() });
 export const upgradeView = z.object({ id: z.string(), release: releaseView, state: z.string(), result: z.string(), createdAtMs: z.number() });
 export const commandView = z.object({ id: z.string(), state: z.string(), result: z.string(), createdAtMs: z.number() });

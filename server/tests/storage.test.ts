@@ -26,3 +26,15 @@ test('malformed JSON and excessive request sizes preserve client error statuses'
   const large = await f.app.inject({ method: 'POST', url: '/api/v1/device/sync', payload: { value: 'x'.repeat(1024 * 1024 + 1) } });
   assert.equal(large.statusCode, 413);
 });
+
+test('v2 migration adds day-clear storage without changing existing usage data', async t => {
+  const f = await fixture(t);const original = { id: 'kept-usage', marker: 'preserve existing payload' };
+  const legacy = new Store(f.directory);legacy.put('usage_sessions', original.id, 'device', original);
+  legacy.db.exec('DROP TABLE IF EXISTS usage_clearances');legacy.db.pragma('user_version=2');legacy.close();
+  const migrated = new Store(f.directory);
+  try {
+    assert.equal(migrated.db.pragma('user_version', { simple: true }), 3);
+    assert.deepEqual(migrated.get('usage_sessions', original.id, z.object({ id: z.string(), marker: z.string() })), original);
+    assert.deepEqual(migrated.db.prepare('SELECT count(*) n FROM usage_clearances').get(), { n: 0 });
+  }finally { migrated.close(); }
+});

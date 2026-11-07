@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 
-const tables = ['admins', 'sessions', 'devices', 'device_credentials', 'challenges', 'device_configs', 'config_mutations', 'app_snapshots', 'usage_sessions', 'coverage_gaps', 'releases', 'upgrade_jobs', 'command_receipts', 'notification_outbox'] as const;
+const tables = ['admins', 'sessions', 'devices', 'device_credentials', 'challenges', 'device_configs', 'config_mutations', 'app_snapshots', 'usage_sessions', 'coverage_gaps', 'releases', 'upgrade_jobs', 'command_receipts', 'notification_outbox', 'usage_clearances'] as const;
 export type Table = typeof tables[number];
 // Tables are a closed, internal allowlist. All values use bound parameters.
 export class Store {
@@ -13,15 +13,16 @@ export class Store {
     this.db = new Database(join(directory, 'manager.sqlite'));
     this.db.pragma('journal_mode = WAL'); this.db.pragma('busy_timeout = 5000');
     const version = this.db.pragma('user_version', { simple: true });
-    if (version !== 0 && version !== 1 && version !== 2) { this.db.close(); throw new Error('Unsupported database version'); }
-    if (version === 1 || version === 2) {
+    if (version !== 0 && version !== 1 && version !== 2 && version !== 3) { this.db.close(); throw new Error('Unsupported database version'); }
+    if (version === 1 || version === 2 || version === 3) {
       try {
-        for (const table of tables) {
+        for (const table of tables.filter(table => version === 3 || table !== 'usage_clearances')) {
           const columns = this.db.prepare(`PRAGMA table_info(${table})`).all().map(row => z.object({ name: z.string() }).parse(row).name);
           if (columns.length !== 3 || !['id', 'deviceId', 'data'].every(name => columns.includes(name))) throw new Error('Invalid database schema');
         }
       } catch (error) { this.db.close(); throw error; }
       if (version === 1) this.migrateUsageIndexes();
+      if (version < 3) this.migrateUsageClearances();
       return;
     }
     const existing = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
@@ -32,15 +33,22 @@ export class Store {
         this.db.exec(`CREATE INDEX IF NOT EXISTS ${table}_device ON ${table}(deviceId)`);
       }
       this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS device_install ON devices(json_extract(data,'$.installId'))");
-      this.db.pragma('user_version = 1');
+      this.migrateUsageIndexes();
+      this.db.pragma('user_version = 3');
     })();
-    this.migrateUsageIndexes();
   }
   private migrateUsageIndexes(): void {
     this.db.transaction(() => {
       this.db.exec("CREATE INDEX usage_time ON usage_sessions(deviceId,COALESCE(json_extract(data,'$.startedAtMs'),json_extract(data,'$.endedAtMs'),json_extract(data,'$.observedAtMs')))");
       this.db.exec("CREATE INDEX gap_time ON coverage_gaps(deviceId,json_extract(data,'$.startedAtMs'))");
       this.db.pragma('user_version = 2');
+    })();
+  }
+  private migrateUsageClearances(): void {
+    this.db.transaction(() => {
+      this.db.exec("CREATE TABLE usage_clearances (id TEXT PRIMARY KEY, deviceId TEXT NOT NULL, data TEXT NOT NULL CHECK(json_valid(data)))");
+      this.db.exec("CREATE INDEX usage_clearances_device ON usage_clearances(deviceId)");
+      this.db.pragma('user_version = 3');
     })();
   }
   get<T>(table: Table, id: string, schema: z.ZodType<T>): T | null {

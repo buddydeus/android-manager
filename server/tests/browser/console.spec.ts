@@ -98,3 +98,25 @@ test('usage missing fields explain the missing event and distinguish active sess
   await expect(rows.nth(2).getByRole('cell').nth(1)).toHaveText('使用中，尚未息屏');await expect(rows.nth(2).getByRole('cell').nth(2)).toHaveText('使用中，息屏后统计');
   await expect(rows.nth(3).getByRole('cell').nth(2)).toHaveText('0小时0分0秒');await expect(rows.nth(4).getByRole('cell').nth(2)).toHaveText('无法计算（起止时间未记录）');await expect(rows.nth(5).getByRole('cell').nth(1)).toHaveText('使用中，尚未息屏');await expect(rows.nth(5).getByRole('cell').nth(2)).toHaveText('使用中，开始时间未记录');await expect(table).not.toContainText('未知');
 });
+
+test('clear usage targets the selected Shanghai date, reports failures, and refreshes the cleared view', async ({ page }) => {
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await page.getByRole('button', { name: '使用记录', exact: true }).click();
+  const rows = page.getByRole('table', { name: '当天使用会话' }).locator('tbody tr');await expect(rows).toHaveCount(1);
+  const date = page.getByLabel('日期（上海时区）');const selected = await date.inputValue();
+  const clear = page.getByRole('button', { name: '清空记录', exact: true });await expect(clear).toBeEnabled();
+  await page.route('**/api/v1/admin/devices/*/usage?*', async route => {
+    if (route.request().method() === 'DELETE') await route.fulfill({ status: 503, json: { message: '清空失败，请重试' } });else await route.continue();
+  });
+  await clear.click();await expect(page.getByRole('alert')).toHaveText('清空失败，请重试');await expect(rows).toHaveCount(1);await expect(clear).toBeEnabled();
+  await page.unroute('**/api/v1/admin/devices/*/usage?*');
+  const previous = new Date(Date.parse(`${selected}T00:00:00+08:00`) - 86400000 + 8 * 3600000).toISOString().slice(0, 10);
+  await date.fill(previous);await expect(rows).toHaveCount(0);await expect(clear).toBeEnabled();
+  const clearedPrevious = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().includes('/usage?'));
+  await clear.click();expect(new URL((await clearedPrevious).url()).searchParams.get('date')).toBe(previous);
+  await expect(page.getByRole('status')).toHaveText(`${previous} 的记录已清空`);
+  await date.fill(selected);await expect(rows).toHaveCount(1);await expect(clear).toBeEnabled();
+  const deleted = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().includes('/usage?'));
+  await clear.click();const response = await deleted;expect(response.status()).toBe(200);expect(new URL(response.url()).searchParams.get('date')).toBe(selected);
+  await expect(page.getByRole('status')).toHaveText(`${selected} 的记录已清空`);await expect(rows).toHaveCount(0);await expect(page.getByText('所选日期没有已保存的会话。请结合覆盖缺口判断。')).toBeVisible();
+  await page.getByRole('button', { name: '刷新记录', exact: true }).click();await expect(rows).toHaveCount(0);await expect(page.getByText(/^查看监测缺口/)).toHaveCount(0);
+});

@@ -11,7 +11,7 @@ export async function backupData(directory: string, destination: string): Promis
   try {
     const source = new Database(file, { readonly: true, fileMustExist: true });
     let version: unknown;
-    try { version = source.pragma('user_version', { simple: true });if (version !== 1 && version !== 2) throw new Error('Unsupported backup schema');await source.backup(join(target, 'manager.sqlite')); }
+    try { version = source.pragma('user_version', { simple: true });if (version !== 1 && version !== 2 && version !== 3) throw new Error('Unsupported backup schema');await source.backup(join(target, 'manager.sqlite')); }
     finally { source.close(); }
     await chmod(join(target, 'manager.sqlite'), 0o600);await mkdir(join(target, 'releases'), { mode: 0o700 });
     const snapshot = new Database(join(target, 'manager.sqlite'), { readonly: true, fileMustExist: true });

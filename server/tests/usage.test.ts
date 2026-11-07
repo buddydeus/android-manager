@@ -58,3 +58,60 @@ test('usage pages order by newest start, break ties consistently and put missing
   }
   assert.deepEqual(ids, [tied.id, newest.id, oldest.id, missing.id]);
 });
+
+test('clearing a day removes its sessions, gaps and totals while preserving other dates and devices', async t => {
+  const now = midnight + 12 * 3600000;
+  const f = await fixture(t, { now: () => now }); const d = await f.register(); const other = await f.register();
+  const s = session(midnight - 1000, 3000);
+  const gap = { id: randomUUID(), recordVersion: 1, startedAtMs: midnight - 1000, endedAtMs: midnight + 2000, reason: 'MONITOR_INTERRUPTED', resolved: false };
+  for (const device of [d, other]) assert.equal((await f.app.inject({ method: 'POST', url: '/api/v1/device/usage', headers: { authorization: `Bearer ${device.token}` }, payload: { sessions: [s], gaps: [gap] } })).statusCode, 200);
+  const admin = await f.admin();const url = `/api/v1/admin/devices/${d.deviceId}/usage?date=2026-11-06`;
+  assert.equal((await f.app.inject({ method: 'DELETE', url, headers: admin })).statusCode, 200);
+  const cleared = (await f.app.inject({ url, headers: admin })).json().data;
+  assert.equal(cleared.total, 0);assert.equal(cleared.completeDurationMs, 0);assert.equal(cleared.incompleteCount, 0);assert.equal(cleared.activeCount, 0);assert.deepEqual(cleared.gaps, []);
+  const previous = (await f.app.inject({ url: `/api/v1/admin/devices/${d.deviceId}/usage?date=2026-11-05`, headers: admin })).json().data;
+  assert.equal(previous.total, 1);assert.equal(previous.completeDurationMs, 1000);assert.equal(previous.gaps.length, 1);
+  const untouched = (await f.app.inject({ url: `/api/v1/admin/devices/${other.deviceId}/usage?date=2026-11-06`, headers: admin })).json().data;
+  assert.equal(untouched.total, 1);assert.equal(untouched.gaps.length, 1);
+});
+
+test('cleared records stay cleared through retransmissions and corrections, but new use is visible', async t => {
+  let now = midnight + 10000;
+  const f = await fixture(t, { now: () => now });const d = await f.register();
+  const old = session(midnight + 100);const futureClock = session(midnight + 50000);
+  const headers = { authorization: `Bearer ${d.token}` };
+  const send = (sessions: unknown[], gaps: unknown[] = []) => f.app.inject({ method: 'POST', url: '/api/v1/device/usage', headers, payload: { sessions, gaps } });
+  assert.equal((await send([old, futureClock])).statusCode, 200);
+  const admin = await f.admin();const url = `/api/v1/admin/devices/${d.deviceId}/usage?date=2026-11-06`;
+  assert.equal((await f.app.inject({ method: 'DELETE', url, headers: admin })).statusCode, 200);
+  const offline = session(midnight + 500);const missingOffline = { ...session(midnight + 600), startedAtMs: null, endedAtMs: midnight + 16000, durationMs: null, quality: 'MISSING_START' };const active = { ...old, recordVersion: 3, quality: 'IN_PROGRESS', endedAtMs: null, durationMs: null };
+  const corrected = { ...futureClock, recordVersion: 3, startedAtMs: midnight + 60000, endedAtMs: midnight + 63000 };
+  const gap = { id: randomUUID(), recordVersion: 1, startedAtMs: midnight + 500, endedAtMs: midnight + 15000, reason: 'MONITOR_INTERRUPTED', resolved: false };
+  assert.equal((await send([old, offline, missingOffline, active, corrected], [gap])).statusCode, 200);
+  assert.equal((await f.app.inject({ url, headers: admin })).json().data.total, 0);
+  const lateCorrection = { ...offline, recordVersion: 3, startedAtMs: midnight + 40000, endedAtMs: midnight + 43000 };
+  const gapCorrection = { ...gap, recordVersion: 2, startedAtMs: midnight + 12000, endedAtMs: midnight + 15000 };
+  assert.equal((await send([lateCorrection], [gapCorrection])).statusCode, 200);
+  const correctedView = (await f.app.inject({ url, headers: admin })).json().data;
+  assert.equal(correctedView.total, 0);assert.deepEqual(correctedView.gaps, []);
+  const fresh = session(midnight + 11000);
+  assert.equal((await send([fresh])).statusCode, 200);
+  const result = (await f.app.inject({ url, headers: admin })).json().data;
+  assert.deepEqual(result.sessions.map((s: { id: string }) => s.id), [fresh.id]);assert.equal(result.completeDurationMs, 3000);assert.deepEqual(result.gaps, []);
+  now += 20000;
+  assert.equal((await f.app.inject({ method: 'DELETE', url, headers: admin })).statusCode, 200);
+  assert.equal((await send([corrected, fresh])).statusCode, 200);
+  assert.equal((await f.app.inject({ url, headers: admin })).json().data.total, 0);
+});
+
+test('clear-day requires administrator CSRF and a valid calendar date', async t => {
+  const f = await fixture(t);const d = await f.register();const admin = await f.admin();
+  const url = `/api/v1/admin/devices/${d.deviceId}/usage?date=2026-11-06`;
+  assert.equal((await f.app.inject({ method: 'DELETE', url })).statusCode, 401);
+  assert.equal((await f.app.inject({ method: 'DELETE', url, headers: { cookie: admin.cookie, origin: admin.origin } })).statusCode, 403);
+  assert.equal((await f.app.inject({ method: 'DELETE', url, headers: { ...admin, origin: 'https://untrusted.example' } })).statusCode, 403);
+  assert.equal((await f.app.inject({ method: 'DELETE', url: url.replace('2026-11-06', '2026-02-30'), headers: admin })).statusCode, 400);
+  const earlyDate = url.replace('2026-11-06', '1969-12-31');
+  assert.equal((await f.app.inject({ method: 'DELETE', url: earlyDate, headers: admin })).statusCode, 200);
+  assert.equal((await f.app.inject({ url: earlyDate, headers: admin })).statusCode, 200);
+});
