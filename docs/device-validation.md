@@ -275,3 +275,11 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 当前市场和浏览器为hidden=true/suspended=false且归属未知；市场日志在显式UNHIDE恢复后再次SUSPEND成功，HIDE多次返回失败，后续只解除暂停。未取得调用前后即时读数，不能把该序列宣称为已确证的OEM同步副作用。
 - 新增失败但实际改变隐藏状态的回归先失败；PolicyCoordinator在完整失败调用后复查，只有明确false→true才保存对应归属且保留失败。68项单元测试0失败/跳过、Lint、Debug/Release构建和独立审查通过。具体边界见docs/DD-20261107-system-app-visibility/requirement.md。
 - 已构建生产HTTPS原点、现有签名和接入凭据的v7 / 1.0-online.7并覆盖安装成功；初始化、总开关、黑名单和周表逐字段不变，服务器确认手机在线versionCode7。未自动解除既有未知状态，也未执行实机禁止/恢复循环；已向用户请求市场/浏览器定向恢复授权。
+
+## 2026-11-07 市场/浏览器定向授权恢复与实测
+
+- 用户明确回复“授权这两个应用”。AuthorizedSystemVisibilityTest只接受显式模式、UUID及expectedRevision=53；初始化/DEBUG/DO及非禁止时段门禁，全程真实PolicyCoordinator锁内；仅com.heytap.market/com.heytap.browser，实际配置不修改。隔离DP持久夹具驱动真实协调器与网关，时间策略采用无副作用适配；finally解除本轮限制，协调恢复失败时执行授权清理且保留测试失败。
+- 实际1项instrumentation通过（8.163秒）。两个包均从hidden=true恢复false，然后SUSPEND成功、HIDE返回失败且即时/1秒后hidden=false，协调器保存暂停归属和隐藏失败PARTIAL；解除后suspended/hidden均false。未重现最初失败后留下隐藏的异常，不能以该短周期测试宣称已证明最初根因或所有OEM/系统包。
+- 系统dumpsys与LAUNCHER查询交叉验证两包hidden=false/suspended=false，启动入口各1个。实际启动market/.activity.MainActivity和browser/com.android.browser.BrowserActivity均Status ok。仪器测试后同v7覆盖安装恢复系统服务绑定；服务器确认在线versionCode7。真实初始化、enabled、blacklist、schedule及revision53均保留；两个原UNKNOWN回执已正常核验CONFIRMED、未知标志均false。
+- 本机结果/tmp/ams-system-probe-result.log；操作前基线/tmp/ams-before-system-probe.json。未清除账号/密码/目录/数据或退管，未操作其他未知限制。
+- 最终探针额外补强异常清理：隔离存储写入或审计失败也通过嵌套finally执行两维解除，审计/解除异常仍保留失败，不以清理成功冒充协调器恢复成功；独立复审通过。最终精确源码仪器测试1项通过（6.667秒），/tmp/ams-system-probe-final.log；随后再次同v7覆盖安装并核验WSS在线、两包hidden/suspended=false、CONFIRMED及原始revision53/规则不变。

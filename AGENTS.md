@@ -68,3 +68,5 @@
 - 网页按日清空使用记录必须鉴权及CSRF，按设备/上海日期隔离；清空标记同时用于分页、合计及缺口，并持久保留截止时间与既有及迟到旧记录ID，防止补传/修正复现，之后新使用仍显示。跨日其他日期与手机缓存保留；SQLite v2→v3只增usage_clearances，备份支持v3，不能以清库处理迁移失败。
 
 - 暂停/隐藏调用失败后须复查实际状态；本次完整调用前false、调用后true时保存对应归属并保留失败回执，确保恢复可解除OEM已生效的副作用。不得把中断调用或既有未知状态归为本软件所有。
+
+- AuthorizedSystemVisibilityTest是用户另行授权的市场/浏览器两项恢复及循环验收：显式模式/UUID/expectedRevision、DEBUG+DO+初始化、当前非禁止时段；全程PolicyCoordinator锁内，隔离持久夹具仅操作两包且不改时间策略/真实规则，finally恢复并在协调恢复失败时授权清理后报告失败。原ManualVisibilityRecoveryTest的关闭总开关门禁不变，不扩展到其他未知包。
