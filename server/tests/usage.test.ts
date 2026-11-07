@@ -39,3 +39,22 @@ test('retention removes expired incomplete records but preserves the ninety-day 
   const data = (await f.app.inject({ url: `/api/v1/admin/devices/${d.deviceId}/usage?date=${date}`, headers: await f.admin() })).json().data;
   assert.equal(data.total, 1); assert.equal(data.sessions[0].id, boundary.id);
 });
+
+test('usage pages order by newest start, break ties consistently and put missing starts last', async t => {
+  const f = await fixture(t, { now: () => midnight + 86400000 }); const d = await f.register();
+  const oldest = { ...session(midnight + 100), id: '00000000-0000-4000-8000-000000000001' };
+  const newest = { ...session(midnight + 300), id: '00000000-0000-4000-8000-000000000002' };
+  const tied = { ...newest, id: '00000000-0000-4000-8000-000000000003' };
+  const missing = { ...session(midnight + 900), startedAtMs: null, durationMs: null, quality: 'MISSING_START' };
+  const saved = await f.app.inject({ method: 'POST', url: '/api/v1/device/usage', headers: { authorization: `Bearer ${d.token}` }, payload: { sessions: [oldest, missing, newest, tied], gaps: [] } });
+  assert.equal(saved.statusCode, 200);
+  const headers = await f.admin();
+  const ids: string[] = [];
+  for (const page of [1, 2]) {
+    const response = await f.app.inject({ url: `/api/v1/admin/devices/${d.deviceId}/usage?date=2026-11-06&limit=2&page=${page}`, headers });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().data.total, 4);
+    ids.push(...response.json().data.sessions.map((s: { id: string }) => s.id));
+  }
+  assert.deepEqual(ids, [tied.id, newest.id, oldest.id, missing.id]);
+});
