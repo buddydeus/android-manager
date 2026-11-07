@@ -32,7 +32,9 @@ class UsageTracker(private val context:Context,val repository:UsageRepository,pr
     @Synchronized fun start() {
         if(scope!=null) return
         val run=CoroutineScope(SupervisorJob()+dispatcher);scope=run
-        ContextCompat.registerReceiver(context,receiver,IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON);addAction(Intent.ACTION_SCREEN_OFF);addAction(Intent.ACTION_USER_PRESENT);addAction(Intent.ACTION_USER_UNLOCKED) },ContextCompat.RECEIVER_NOT_EXPORTED)
+        // These four protected broadcasts may come from SystemUI's own UID, not system UID.
+        // Do not add custom/unprotected actions to this exported receiver.
+        ContextCompat.registerReceiver(context,receiver,IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON);addAction(Intent.ACTION_SCREEN_OFF);addAction(Intent.ACTION_USER_PRESENT);addAction(Intent.ACTION_USER_UNLOCKED) },ContextCompat.RECEIVER_EXPORTED)
         run.launch { safely {
             if(!ready()) return@safely
             repository.record(UsageKind.ATTACH,System.currentTimeMillis(),SystemClock.elapsedRealtime(),boot(),!context.getSystemService(KeyguardManager::class.java).isKeyguardLocked,context.getSystemService(PowerManager::class.java).isInteractive)
