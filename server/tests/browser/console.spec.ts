@@ -70,3 +70,13 @@ test('current policy failures and alarm warnings remain visible without claiming
   await page.getByRole('button', { name: /^测试手机/ }).click();await expect(page.getByText('定时执行不可用：请授予精确闹钟权限', { exact: true })).toBeVisible();
   failed = true;await page.getByRole('button', { name: '刷新', exact: true }).click();await expect(page.getByText('系统拒绝暂停测试应用', { exact: true })).toBeVisible();await expect(page.getByText('已接收，等待执行', { exact: true })).toBeVisible();
 });
+
+test('application checkboxes alone add and remove blacklist entries with no duplicate selected list', async ({ page }) => {
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();
+  const game = page.getByRole('checkbox', { name: /测试游戏/ });await game.check();
+  await expect(page.getByText(/^已选 \d+ 个应用$/)).toHaveCount(0);
+  await page.getByRole('button', { name: '保存配置', exact: true }).click();await expect(page.getByText('配置已保存，请查看设备接收与执行结果。')).toBeVisible();
+  await page.reload();await page.getByRole('button', { name: /^测试手机/ }).click();await expect(game).toBeChecked();
+  await game.uncheck();await page.getByRole('button', { name: '保存配置', exact: true }).click();await expect(page.getByText('配置已保存，请查看设备接收与执行结果。')).toBeVisible();
+  await page.reload();await page.getByRole('button', { name: /^测试手机/ }).click();await expect(game).not.toBeChecked();
+});

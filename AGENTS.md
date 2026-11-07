@@ -56,3 +56,5 @@
 - ams.opt.work线上使用现有Nginx+Docker AMS，配置见server/deploy/nginx；只启动ams，禁用通用Caddy启动路径，保留server_ams_data和.env。应用仅绑定loopback18080，可信代理为固定bridge网关；host网络仅用于该主机镜像构建。证书由Certbot续期并重载Nginx，生产凭据/私钥不得入库。
 
 - ManualVisibilityRecoveryTest仅用于用户明确授权的com.heytap.market恢复显示，不作为常规探针；须显式模式/UUID/physicalRecoveryTarget/expectedRevision，初始化+DEBUG+DO+管控关闭+未暂停后才在PolicyCoordinator锁内审计并单包setHidden(false)。不得扩为自动清除未知限制；执行后复核规则、系统可见性和远程连接。
+
+- 网页黑名单只保留应用目录行内复选开关与统一保存，不维护第二份已选应用操作列表；增删均复用同一草稿与保存接口，受保护应用仍禁止新增选择。

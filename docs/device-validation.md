@@ -230,3 +230,9 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 用户明确授权“去除限制，让他可见”后，使用ManualVisibilityRecoveryTest，显式传入恢复模式、UUID、固定physicalRecoveryTarget及实际配置版本。初始化/DEBUG/DO/管理关闭/未暂停/版本一致校验后，经PolicyCoordinator串行入口先记录授权审计，再调用DPM单包setHidden(false)。独立静态安全审查无阻断项；实际instrumentation 1项通过，assembleDebugAndroidTest和Lint通过。
 - 恢复后系统核验hidden=false、suspended=false；本机记录转为CONFIRMED，unknownHidden=false、error为空。Launcher入口解析为com.heytap.market/.activity.MainActivity；显式启动返回Status: ok，当前前台实际为软件商店。
 - 初始化、总开关、黑名单和周表与本轮基线全部一致，管控保持关闭，未改密码、目录或其他应用限制。instrumentation结束后覆盖安装相同线上v5以恢复系统绑定；生产设备在线已复核。本次仅为用户授权的单包恢复，不将其变成日常自动解除未知归属的行为。
+
+### 同日：网页仅保留应用行黑名单控制
+
+- 按用户要求删除配置页下方“已选应用”重复操作列表及专用CSS；保留上方每个应用的复选框、草稿和统一保存，未改为互斥单选。使用统计页的监测缺口details不受影响；沿用现有Vue script setup与TypeScript结构，无新增依赖。
+- 新增真实浏览器回归：勾选应用后不存在第二份列表，保存并刷新仍选中；取消、保存、刷新仍取消。旧实现因仍出现“已选”列表失败，修改后通过。最终34项服务端测试零失败/跳过、tsc/vue-tsc、API/Vue构建及6项浏览器测试均通过。
+- 已备份线上两源文件和旧镜像后，仅更新网页源文件并重建AMS镜像，保留.env与数据卷；容器恢复healthy。实际生产浏览器登录后读到23行应用、11项当前勾选，重复已选列表为0。本轮未在生产点击应用勾选或保存配置，未对手机施加新限制，也不回退用户当前配置。
