@@ -223,3 +223,10 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 升级后生产设备重新在线。初始化、总开关、全部周表及10项黑名单逐字段与本轮基线一致；未修改密码、目录和DO，无USB反向转发参与生产通信。线上调试APK安全保存在本机私有配置目录，不入Git。
 - 下载期间测试电脑的公网状态查询出现RemoteDisconnected及TLS连接超时；服务器容器保持healthy、重启数0，手机临时文件持续增长。通过SSH只读观察确认INSTALLING→SUCCEEDED；完成后正常管理员接口、默认TLS健康检查及限定TLS1.2的证书验证均恢复成功。尚未定位短暂查询故障的具体网络原因，不将其描述为全程无中断。
 - 结论：本轮三条通信/更新功能链路通过。版本5仅为相同功能代码的递增版本调试签名包，未修复既有使用统计缺起点或原生管控异常；不据此宣称App全部功能通过。
+
+### 同日：用户显式授权恢复软件商店可见
+
+- 用户关闭管理后，com.heytap.market仍为installed=true/hidden=true/suspended=false，记录为未知隐藏归属；只读部署前基线也已有该状态。普通ADB pm unhide被MANAGE_USERS权限拒绝，未生效。
+- 用户明确授权“去除限制，让他可见”后，使用ManualVisibilityRecoveryTest，显式传入恢复模式、UUID、固定physicalRecoveryTarget及实际配置版本。初始化/DEBUG/DO/管理关闭/未暂停/版本一致校验后，经PolicyCoordinator串行入口先记录授权审计，再调用DPM单包setHidden(false)。独立静态安全审查无阻断项；实际instrumentation 1项通过，assembleDebugAndroidTest和Lint通过。
+- 恢复后系统核验hidden=false、suspended=false；本机记录转为CONFIRMED，unknownHidden=false、error为空。Launcher入口解析为com.heytap.market/.activity.MainActivity；显式启动返回Status: ok，当前前台实际为软件商店。
+- 初始化、总开关、黑名单和周表与本轮基线全部一致，管控保持关闭，未改密码、目录或其他应用限制。instrumentation结束后覆盖安装相同线上v5以恢复系统绑定；生产设备在线已复核。本次仅为用户授权的单包恢复，不将其变成日常自动解除未知归属的行为。

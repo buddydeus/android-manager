@@ -54,3 +54,5 @@
 - `npm run build:server`在根目录或server/生成源码部署包server/out；输出只含构建所需文件，不打包秘密/数据/依赖。含.env或额外部署文件的旧out禁止覆盖。deploy.sh固定Compose项目server，保留.env及管理员/卷，不source配置、不清库，构建或状态检查失败立即停止；部署状态探针区分首次/既有管理员与存储错误。部署回归纳入server/tests/deployment.test.ts。
 
 - ams.opt.work线上使用现有Nginx+Docker AMS，配置见server/deploy/nginx；只启动ams，禁用通用Caddy启动路径，保留server_ams_data和.env。应用仅绑定loopback18080，可信代理为固定bridge网关；host网络仅用于该主机镜像构建。证书由Certbot续期并重载Nginx，生产凭据/私钥不得入库。
+
+- ManualVisibilityRecoveryTest仅用于用户明确授权的com.heytap.market恢复显示，不作为常规探针；须显式模式/UUID/physicalRecoveryTarget/expectedRevision，初始化+DEBUG+DO+管控关闭+未暂停后才在PolicyCoordinator锁内审计并单包setHidden(false)。不得扩为自动清除未知限制；执行后复核规则、系统可见性和远程连接。
