@@ -54,7 +54,7 @@ class PolicyCoordinatorTest {
         override fun write(state:ManagerState) { if(failIntent && state.records.values.any { it.pending.isNotEmpty() }) error("disk full");this.state=state }
     }
     private class Port:DevicePolicyPort {
-        var suspended=false;var hidden=false;var suspendFails=false;var hideFails=false;var crashAfterSuspend=false;var crashAfterHide=false
+        var suspended=false;var hidden=false;var suspendFails=false;var hideFails=false;var hideChangesDespiteFailure=false;var crashAfterSuspend=false;var crashAfterHide=false
         val calls=mutableListOf<String>()
         override fun isOwner()=true
         override fun inspect(packageName:String)=PackagePolicyState(suspended,hidden)
@@ -64,8 +64,17 @@ class PolicyCoordinatorTest {
             suspended=value;if(crashAfterSuspend) throw IllegalStateException("process stopped")
             return PolicyStepResult(true)
         }
-        override fun setHidden(packageName:String,value:Boolean):PolicyStepResult { calls+="hide:$value";if(hideFails) return PolicyStepResult(false,"rejected");hidden=value;if(crashAfterHide) error("process stopped after hide");return PolicyStepResult(true) }
+        override fun setHidden(packageName:String,value:Boolean):PolicyStepResult { calls+="hide:$value";if(hideFails) { if(hideChangesDespiteFailure) hidden=value;return PolicyStepResult(false,"rejected") };hidden=value;if(crashAfterHide) error("process stopped after hide");return PolicyStepResult(true) }
         override fun applyTime(enabled:Boolean,owned:Boolean)=TimePolicyResult(enabled,true,"ok")
+    }
+    @Test fun failedHideThatActuallyChangesStateRemainsOwnedAndIsRestored() {
+        val s=Store(active());val p=Port().apply { hideFails=true;hideChangesDespiteFailure=true }
+        val c=coordinator(s,p);c.reconcile("restrict")
+        assertTrue(p.hidden);assertTrue(s.state.records.getValue("test.app").ownHidden)
+        assertEquals("PARTIAL",s.state.records.getValue("test.app").result)
+        assertFalse(s.state.records.getValue("test.app").unknownHidden)
+        p.hideFails=false;s.state=s.state.copy(enabled=false);c.reconcile("restore")
+        assertFalse(p.hidden);assertFalse(p.suspended)
     }
     private val catalog=object:CatalogPort { override fun load(known:Map<String,AppEntry>)=mapOf("test.app" to AppEntry("test.app","Test",instance=1));override fun protection(packageName:String)="" }
     private fun active()=ManagerState(initialized=true,blacklist=setOf("test.app"),schedule=List(7){DayWindow(0,1439)})

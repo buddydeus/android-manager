@@ -269,3 +269,9 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 最终39项服务端测试0跳过、类型检查、API/网页构建、8项浏览器测试及build:server全部退出0。覆盖跨设备/跨日隔离、缺起点/缺口、补传及更高版本修正、新会话、重复清空、权限/CSRF、非法/早期日期、v2→v3无损迁移和含标记的v3一致性备份。真实网页用例验证失败保留记录、选择昨天清空不影响今天、再清空今天后列表与合计刷新。
 - 生产先保存旧镜像`server-ams:before-clear-day`和v2一致性备份`/data/backups/ams-backup-HgybYb`，替换5个功能源文件后使用既有Nginx专用Compose重建AMS；.env、管理员、卷和其他服务保留。启动迁移至SQLite v3仅新增usage_clearances。健康检查ready；实际v3备份成功`/data/backups/ams-backup-oWI1RV`。旧程序回退须恢复配套v2备份，不能直接打开v3库。
 - 生产真实HTTPS浏览器登录后确认“清空记录”可用，默认日期2026-11-07，390px视口无整页横向溢出并目视确认按钮可见；未在生产额外发出清空。手机仍在线v6，配置接口与发布前基线一致。临时截图位于本机私有`/tmp/ams-clear-day/production-{desktop,mobile}.png`，不含登录输入，不入Git。
+
+## 2026-11-07 系统应用恢复可见性调查与防护
+
+- 当前市场和浏览器为hidden=true/suspended=false且归属未知；市场日志在显式UNHIDE恢复后再次SUSPEND成功，HIDE多次返回失败，后续只解除暂停。未取得调用前后即时读数，不能把该序列宣称为已确证的OEM同步副作用。
+- 新增失败但实际改变隐藏状态的回归先失败；PolicyCoordinator在完整失败调用后复查，只有明确false→true才保存对应归属且保留失败。68项单元测试0失败/跳过、Lint、Debug/Release构建和独立审查通过。具体边界见docs/DD-20261107-system-app-visibility/requirement.md。
+- 已构建生产HTTPS原点、现有签名和接入凭据的v7 / 1.0-online.7并覆盖安装成功；初始化、总开关、黑名单和周表逐字段不变，服务器确认手机在线versionCode7。未自动解除既有未知状态，也未执行实机禁止/恢复循环；已向用户请求市场/浏览器定向恢复授权。

@@ -166,7 +166,14 @@ class PolicyCoordinator(
                 val changed=if(hidden) record.copy(ownHidden=target,pending="") else record.copy(ownSuspended=target,pending="")
                 persist(summarized(changed))
             } else {
-                failures+="$name：${result.reason}";persist(summarized(record.copy(pending="")))
+                // Some OEMs return failure after changing the hidden/suspended flag.
+                // Only a proven false -> true transition during this completed call is ours.
+                val after=policy.inspect(pkg).let { if(hidden) it.hidden else it.suspended }
+                val baseline=if(hidden) before.hidden else before.suspended
+                val changed=if(target && baseline==false && after==true) {
+                    if(hidden) record.copy(ownHidden=true) else record.copy(ownSuspended=true)
+                } else record
+                failures+="$name：${result.reason}";persist(summarized(changed.copy(pending="")))
             }
             log(AuditEvent(LogCategory.POLICY_EXECUTION,name,if(result.success) "成功" else result.reason,pkg,s.revision))
             return result.success
