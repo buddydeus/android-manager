@@ -52,3 +52,5 @@
 - RemoteValidationBootstrapTest只接受显式UUID、CA指纹和固定隔离HTTPS原点，在模拟器安装测试CA且不得修改初始化；真实初始化须通过现有UI/SAF。测试服务仅监听loopback，不使用生产凭据。
 
 - `npm run build:server`在根目录或server/生成源码部署包server/out；输出只含构建所需文件，不打包秘密/数据/依赖。含.env或额外部署文件的旧out禁止覆盖。deploy.sh固定Compose项目server，保留.env及管理员/卷，不source配置、不清库，构建或状态检查失败立即停止；部署状态探针区分首次/既有管理员与存储错误。部署回归纳入server/tests/deployment.test.ts。
+
+- ams.opt.work线上使用现有Nginx+Docker AMS，配置见server/deploy/nginx；只启动ams，禁用通用Caddy启动路径，保留server_ams_data和.env。应用仅绑定loopback18080，可信代理为固定bridge网关；host网络仅用于该主机镜像构建。证书由Certbot续期并重载Nginx，生产凭据/私钥不得入库。

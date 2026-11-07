@@ -37,7 +37,9 @@ AMS_TEST_BUILD_TOOLS=/absolute/path/Android/sdk/build-tools/36.0.0 npm run test:
 
 ## Linux Docker 部署
 
-推荐在仓库根目录或本目录运行`npm run build:server`，生成`server/out/`，无需本机构建Docker镜像；Node24即可生成源码部署包，不要求本机安装server依赖。复制完整`out/`到服务器，运行`./deploy.sh`，检查Docker、引导配置、构建镜像、首次创建管理员并等待容器健康。后续运行保留管理员及数据；公网DNS/TLS另行核查。详见[随包操作说明](deploy/README.md)。
+实际线上采用[既有Nginx部署配置](deploy/nginx/README.md)，只启动ams并绑定127.0.0.1:18080，不启动下面通用方案中的Caddy。
+
+推荐在仓库根目录或本目录运行`npm run build:server`，生成`server/out/`，无需本机构建Docker镜像；Node24即可生成源码部署包，不要求本机安装server依赖。对尚无Web代理的新服务器，复制完整`out/`并运行`./deploy.sh`（Caddy方案）；已有Nginx须使用专用运行说明。通用脚本会检查Docker、引导配置、构建镜像、首次创建管理员并等待容器健康。后续运行保留管理员及数据；公网DNS/TLS另行核查。详见[随包操作说明](deploy/README.md)。
 
 生成器只复制部署所需源码和固定构建文件，排除依赖、测试、本地数据和秘密；`out/`不入Git。重新构建仅替换带生成标记且无额外文件的旧包，含`.env`/备份等部署内容时拒绝覆盖。更新服务器时合并覆盖新包文件、保留原`.env`；Compose项目名固定`server`，迁移其他项目名的数据须先备份核对。以下命令仍可用于手动部署。
 
