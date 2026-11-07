@@ -13,7 +13,8 @@
     "start": "node dist/api/src/main.js",
     "admin": "node api/src/admin-cli.ts",
     "build:web": "vite build --config web/vite.config.ts",
-    "test:browser": "playwright test --config playwright.config.ts"
+    "test:browser": "playwright test --config playwright.config.ts",
+    "build:server": "node scripts/build-server.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.5",

@@ -1,0 +1,7 @@
+{
+  "name": "android-manager",
+  "private": true,
+  "scripts": {
+    "build:server": "npm --prefix server run build:server"
+  }
+}

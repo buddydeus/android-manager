@@ -13,6 +13,8 @@ Android 11+ Device Owner 应用。既有本机需求见 [requirement](docs/requi
 
 ## 构建与调试
 
+服务器部署包：在仓库根目录或`server/`运行`npm run build:server`，生成`server/out/`。完整复制该目录到Linux服务器后运行`./deploy.sh`，按提示提供与App一致的接入凭据及首次管理员账号。服务器需Docker Compose和联网构建条件；重复部署保留`.env`和数据卷。详见[部署包说明](server/deploy/README.md)。
+
 远程服务和Vue网页位于 [server](server/README.md)，使用Node24、TypeScript6与本机SQLite。已实现自动接入、配置同步/推送、应用目录、使用统计、APK升级及仅在线整机重启；[网页实际截图](designs/validation/remote-console/README.md)与[部署说明](server/README.md)可供检查。当前不表示已部署到线上或完成实机验收。
 
 远程接入在本机初始化完成后启动，独立于本机登录和管控总开关。受控 APK 构建前设置 `AMS_ENROLLMENT_KEY`，与服务端接入凭据一致；缺少凭据时显示待同步，本地管控继续。服务器固定为 `https://ams.opt.work`，仅 debug 构建可用 `AMS_TEST_ORIGIN` 指定隔离 HTTPS 测试原点。设置页显示连接与同步状态，不提供更换地址或解绑入口。调试构建可在显式隔离模拟器夹具中信任测试用户CA；Release仅信任系统CA，不包含该调试配置。

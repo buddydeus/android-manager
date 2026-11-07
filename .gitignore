@@ -16,3 +16,7 @@ local.properties
 /server/.env.local
 server/test-results/
 server/playwright-report/
+
+/server/out/
+/server/.out-build-*/
+/server/.out-old-*/

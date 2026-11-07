@@ -50,3 +50,5 @@
 
 - 恢复旧服务器备份后，缺失任务或缺许可证据的回执须分项隔离；保留本机原始状态/结果，仅同版本停止补传，不阻塞其他同步，不重建许可或重复执行。网页须分别展示当前配置的策略结果和闹钟状态。
 - RemoteValidationBootstrapTest只接受显式UUID、CA指纹和固定隔离HTTPS原点，在模拟器安装测试CA且不得修改初始化；真实初始化须通过现有UI/SAF。测试服务仅监听loopback，不使用生产凭据。
+
+- `npm run build:server`在根目录或server/生成源码部署包server/out；输出只含构建所需文件，不打包秘密/数据/依赖。含.env或额外部署文件的旧out禁止覆盖。deploy.sh固定Compose项目server，保留.env及管理员/卷，不source配置、不清库，构建或状态检查失败立即停止；部署状态探针区分首次/既有管理员与存储错误。部署回归纳入server/tests/deployment.test.ts。
