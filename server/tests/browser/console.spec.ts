@@ -80,3 +80,21 @@ test('application checkboxes alone add and remove blacklist entries with no dupl
   await game.uncheck();await page.getByRole('button', { name: '保存配置', exact: true }).click();await expect(page.getByText('配置已保存，请查看设备接收与执行结果。')).toBeVisible();
   await page.reload();await page.getByRole('button', { name: /^测试手机/ }).click();await expect(game).not.toBeChecked();
 });
+
+test('usage missing fields explain the missing event and distinguish active sessions without invented values', async ({ page }) => {
+  const fixture = await credentials();const end = Date.parse('2026-11-07T20:43:02+08:00');
+  await page.route('**/api/v1/admin/devices/*/usage?*', route => route.fulfill({ json: { data: { sessions: [
+    { id: 'missing-start', startedAtMs: null, endedAtMs: end, durationMs: null, quality: 'MISSING_START', source: 'LIVE', clockAdjusted: false },
+    { id: 'missing-end', startedAtMs: end, endedAtMs: null, durationMs: null, quality: 'MISSING_END', source: 'LIVE', clockAdjusted: false },
+    { id: 'active', startedAtMs: end, endedAtMs: null, durationMs: null, quality: 'IN_PROGRESS', source: 'LIVE', clockAdjusted: false },
+    { id: 'zero', startedAtMs: end, endedAtMs: end, durationMs: 0, quality: 'COMPLETE', source: 'LIVE', clockAdjusted: false },
+    { id: 'missing-both', startedAtMs: null, endedAtMs: null, durationMs: null, quality: 'MISSING_END', source: 'LIVE', clockAdjusted: false },
+    { id: 'active-missing-start', startedAtMs: null, endedAtMs: null, durationMs: null, quality: 'IN_PROGRESS', source: 'LIVE', clockAdjusted: false },
+  ], gaps: [], completeDurationMs: 0, incompleteCount: 3, activeCount: 2, total: 6 } } }));
+  await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await page.getByRole('button', { name: '使用记录', exact: true }).click();
+  const table = page.getByRole('table', { name: '当天使用会话' });const rows = table.locator('tbody tr');
+  await expect(rows.nth(0).getByRole('cell').nth(0)).toHaveText('未记录开始时间');await expect(rows.nth(0).getByRole('cell').nth(1)).toContainText('20:43:02');await expect(rows.nth(0).getByRole('cell').nth(2)).toHaveText('无法计算（缺少开始时间）');
+  await expect(rows.nth(1).getByRole('cell').nth(1)).toHaveText('未记录结束时间');await expect(rows.nth(1).getByRole('cell').nth(2)).toHaveText('无法计算（缺少结束时间）');
+  await expect(rows.nth(2).getByRole('cell').nth(1)).toHaveText('使用中，尚未息屏');await expect(rows.nth(2).getByRole('cell').nth(2)).toHaveText('使用中，息屏后统计');
+  await expect(rows.nth(3).getByRole('cell').nth(2)).toHaveText('0小时0分0秒');await expect(rows.nth(4).getByRole('cell').nth(2)).toHaveText('无法计算（起止时间未记录）');await expect(rows.nth(5).getByRole('cell').nth(1)).toHaveText('使用中，尚未息屏');await expect(rows.nth(5).getByRole('cell').nth(2)).toHaveText('使用中，开始时间未记录');await expect(table).not.toContainText('未知');
+});
