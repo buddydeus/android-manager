@@ -291,3 +291,11 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 最终44项服务端测试0失败/跳过，typecheck/build、8项网页关键路径和build:server通过。覆盖RFC官方向量、绑定证明、固定密码拒绝、并发/重放、重启限速、重置撤会话、密钥丢失、prepare/无效activate不改变v3及旧身份、旧库状态探针只读、真实APK校验/下载及其余管理回归。本机原临时JDK21已不完整，APK工具验证实际使用可用的JDK26；不声称重跑Android构建。
 - 生产旧镜像标记server-ams:before-totp，源文件备份operations-backups/totp-login/source-before.tar，一致性备份/data/backups/ams-backup-B8Lybm。新镜像server-ams:totp-ready已构建，未执行up或切换运行容器；新镜像prepare生成/data/totp-enrollment.json，仅复制到本机权限600私有文件供用户绑定，密钥不进入聊天/Git。
 - prepare后通过只读SQL确认生产schema仍3、旧scrypt身份和operator账号保留，旧容器仍Up4days且health/ready成功；服务器NTPSynchronized=yes。用户真实动态码待输入，因此不宣称已启用生产TOTP或完成真实新登录验收。确认后才执行activate并启动新镜像，删除临时绑定资料，继续核验备份、登录与设备连接。
+
+## 2026-11-11 用户真实TOTP绑定与生产切换完成
+
+- 用户提交当前动态验证码后，经SSH stdin/环境传入新镜像activate，不把动态码写入命令参数或文档。真实绑定验证通过后，v3→v4仅增加登录限速表，管理员身份改为TOTP；原salt/verifier/kdf字段移除、全部旧会话清空，再按既有Nginx专用Compose启动AMS，容器healthy、health/ready成功。
+- 只读核验管理员operator/kind=TOTP、schema4、auth.key权限600，服务端临时绑定文件已删除。使用正常证书校验的生产浏览器实际完成用户名+6位动态码登录，页面无管理员密码输入框；固定密码请求返回400，鉴权设备列表返回200。验证后主动退出，残留验证会话0；本机私有临时绑定文件亦删除，不再保留额外明文密钥副本。
+- 生产设备列表确认PKD130/v7在线；只读比较切换前备份与当前库，device_configs的config及device_credentials内容逐项一致，未修改管控规则或重新注册身份。
+- 新一致性备份/data/backups/ams-backup-3resyo为schema4，包含与运行实例一致的auth.key，权限600；原v3备份/data/backups/ams-backup-B8Lybm仅作为明确旧版本恢复材料，不作为新鉴权默认回退。
+- 完成声明限于本轮TOTP绑定、登录、会话撤销、设备连接及备份；不把TOTP单因素描述为多因素或抗钓鱼认证。一次性码在成功登录后不可再次使用，用户需使用身份验证器下一个动态码。
