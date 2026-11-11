@@ -30,21 +30,28 @@ printf '%s\\n' "$*" >> "$CALL_LOG"
 case "$*" in
   *'build ams'*) [[ -z \${AMS_ENROLLMENT_KEY+x} ]]; [[ "\${FAIL_BUILD:-}" != 1 ]] ;;
   *'deployment-cli.js'*) if [[ -f "$STATE_FILE" ]]; then echo initialized; else echo uninitialized; fi ;;
-  *'admin-cli.js'*) [[ -n "$AMS_ADMIN_USER" && -n "$AMS_ADMIN_PASSWORD" ]]; touch "$STATE_FILE" ;;
+  *'admin-cli.js'*) [[ -n "$AMS_ADMIN_USER" ]]; touch "$STATE_FILE" ;;
 esac
 `);await chmod(bin, 0o755);
-  const env = { ...process.env, PATH: dir + ':' + process.env.PATH, CALL_LOG: log, STATE_FILE: state, AMS_ENROLLMENT_KEY: 'a'.repeat(32), AMS_ADMIN_USER: 'operator', AMS_ADMIN_PASSWORD: 'private-test-password' };
+  const env = { ...process.env, PATH: dir + ':' + process.env.PATH, CALL_LOG: log, STATE_FILE: state, AMS_ENROLLMENT_KEY: 'a'.repeat(32), AMS_ADMIN_USER: 'operator' };
   const run = (extra = {}) => spawnSync('bash', ['deploy.sh'], { cwd: dir, env: { ...env, ...extra }, encoding: 'utf8' });
   const first = run();assert.equal(first.status, 0, first.stderr + first.stdout);const secret = await readFile(join(dir, '.env'), 'utf8');assert.equal(run({ AMS_ENROLLMENT_KEY: 'b'.repeat(32) }).status, 0);assert.equal(await readFile(join(dir, '.env'), 'utf8'), secret);
-  let calls = await readFile(log, 'utf8');assert.equal(calls.split('admin-cli.js').length - 1, 1);assert(!calls.includes(env.AMS_ADMIN_PASSWORD));assert(!calls.includes('down'));
+  let calls = await readFile(log, 'utf8');assert.equal(calls.split('admin-cli.js').length - 1, 1);assert(!calls.includes('down'));
   await writeFile(log, '');assert.notEqual(run({ FAIL_BUILD: '1' }).status, 0);calls = await readFile(log, 'utf8');assert(!calls.includes('up -d'));assert(!calls.includes('admin-cli'));
 });
 test('deployment state check distinguishes first install, existing admin and damaged database', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'ams-deploy-db-'));t.after(() => rm(dir, { recursive: true, force: true }));
   const run = () => spawnSync(process.execPath, ['api/src/deployment-cli.ts'], { cwd: root, env: { ...process.env, AMS_DATA_DIR: dir }, encoding: 'utf8' });
   assert.equal(run().stdout.trim(), 'uninitialized');
-  const { provisionAdmin } = await import('../api/src/auth.ts');provisionAdmin(dir, 'operator', 'test-private-password');assert.equal(run().stdout.trim(), 'initialized');
+  const { provisionAdmin } = await import('../api/src/auth.ts');provisionAdmin(dir, 'operator', 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ');assert.equal(run().stdout.trim(), 'initialized');
   const { Store } = await import('../api/src/db.ts');const store = new Store(dir);store.db.pragma('user_version=999');store.close();assert.notEqual(run().status, 0);
   const { default: Database } = await import('better-sqlite3');const retained = new Database(join(dir, 'manager.sqlite'), { readonly: true });
   try { assert.equal(retained.pragma('user_version', { simple: true }), 999);assert.deepEqual(retained.prepare('SELECT count(*) AS n FROM admins').get(), { n: 1 }); }finally { retained.close(); }
+});
+
+test('legacy deployment probe remains read-only and leaves v3 restartable', async t => {
+ const dir=await mkdtemp(join(tmpdir(),'ams-legacy-probe-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const {Store}=await import('../api/src/db.ts');const store=new Store(dir);store.put('admins','administrator','',{username:'operator',kdf:'scrypt',kdfVersion:1});store.db.exec('DROP TABLE auth_attempts');store.db.pragma('user_version=3');store.close();
+ const result=spawnSync(process.execPath,['api/src/deployment-cli.ts'],{cwd:root,env:{...process.env,AMS_DATA_DIR:dir},encoding:'utf8'});assert.equal(result.status,0,result.stderr);assert.equal(result.stdout.trim(),'legacy');
+ const {default:Database}=await import('better-sqlite3');const db=new Database(join(dir,'manager.sqlite'),{readonly:true});try{assert.equal(db.pragma('user_version',{simple:true}),3);assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name='auth_attempts'").get(),undefined);}finally{db.close();}
 });

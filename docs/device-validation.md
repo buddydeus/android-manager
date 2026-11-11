@@ -283,3 +283,11 @@ OPPO 完整管控验收            → 未通过：市场隐藏受保护、待�
 - 系统dumpsys与LAUNCHER查询交叉验证两包hidden=false/suspended=false，启动入口各1个。实际启动market/.activity.MainActivity和browser/com.android.browser.BrowserActivity均Status ok。仪器测试后同v7覆盖安装恢复系统服务绑定；服务器确认在线versionCode7。真实初始化、enabled、blacklist、schedule及revision53均保留；两个原UNKNOWN回执已正常核验CONFIRMED、未知标志均false。
 - 本机结果/tmp/ams-system-probe-result.log；操作前基线/tmp/ams-before-system-probe.json。未清除账号/密码/目录/数据或退管，未操作其他未知限制。
 - 最终探针额外补强异常清理：隔离存储写入或审计失败也通过嵌套finally执行两维解除，审计/解除异常仍保留失败，不以清理成功冒充协调器恢复成功；独立复审通过。最终精确源码仪器测试1项通过（6.667秒），/tmp/ams-system-probe-final.log；随后再次同v7覆盖安装并核验WSS在线、两包hidden/suspended=false、CONFIRMED及原始revision53/规则不变。
+
+## 2026-11-11 用户名+TOTP登录：实现及切换准备
+
+- 用户要求不输入固定密码，明确选择服务器命令初始化。新增RFC6238 SHA1/6位/30秒±1周期校验、原子时间步消费防并发重放、持久化账号/IP限速和会话generation；CLI prepare→activate可先准备私有资料、验证真实身份验证器后切换。init/confirm及reset/confirm供新部署及显式重置，固定密码无回退。
+- auth.key独立权限600、AES-256-GCM保护数据库内密钥；私有完整备份配套包含auth.key。密钥缺失时启动/备份失败，禁止自动生成新密钥。v3→v4只增加auth_attempts；旧管理员身份未在prepare阶段改变。状态探针已改为只读，避免legacy拒绝部署前提前升级库，独立审查发现的P1经回归及复审关闭。
+- 最终44项服务端测试0失败/跳过，typecheck/build、8项网页关键路径和build:server通过。覆盖RFC官方向量、绑定证明、固定密码拒绝、并发/重放、重启限速、重置撤会话、密钥丢失、prepare/无效activate不改变v3及旧身份、旧库状态探针只读、真实APK校验/下载及其余管理回归。本机原临时JDK21已不完整，APK工具验证实际使用可用的JDK26；不声称重跑Android构建。
+- 生产旧镜像标记server-ams:before-totp，源文件备份operations-backups/totp-login/source-before.tar，一致性备份/data/backups/ams-backup-B8Lybm。新镜像server-ams:totp-ready已构建，未执行up或切换运行容器；新镜像prepare生成/data/totp-enrollment.json，仅复制到本机权限600私有文件供用户绑定，密钥不进入聊天/Git。
+- prepare后通过只读SQL确认生产schema仍3、旧scrypt身份和operator账号保留，旧容器仍Up4days且health/ready成功；服务器NTPSynchronized=yes。用户真实动态码待输入，因此不宣称已启用生产TOTP或完成真实新登录验收。确认后才执行activate并启动新镜像，删除临时绑定资料，继续核验备份、登录与设备连接。

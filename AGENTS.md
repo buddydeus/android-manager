@@ -70,3 +70,5 @@
 - 暂停/隐藏调用失败后须复查实际状态；本次完整调用前false、调用后true时保存对应归属并保留失败回执，确保恢复可解除OEM已生效的副作用。不得把中断调用或既有未知状态归为本软件所有。
 
 - AuthorizedSystemVisibilityTest是用户另行授权的市场/浏览器两项恢复及循环验收：显式模式/UUID/expectedRevision、DEBUG+DO+初始化、当前非禁止时段；全程PolicyCoordinator锁内，隔离持久夹具仅操作两包且不改时间策略/真实规则，finally恢复并在协调恢复失败时授权清理后报告失败。原ManualVisibilityRecoveryTest的关闭总开关门禁不变，不扩展到其他未知包。
+
+- 网页鉴权仅用户名+TOTP，无固定密码回退；CLI prepare不得改库/旧登录，activate先验证绑定证明再切换身份并清会话。6位/30秒SHA1、±1周期，原子消费时间步防并发重放；账号/IP限速持久化auth_attempts，v3→v4仅增表。auth.key独立于DB、权限600，备份配套保留；缺失或解密失败禁止自动生成身份密钥，绑定资料不入日志/聊天/Git，验证成功后删除。手机管理密码规则不变。

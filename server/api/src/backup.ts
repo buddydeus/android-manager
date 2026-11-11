@@ -11,11 +11,14 @@ export async function backupData(directory: string, destination: string): Promis
   try {
     const source = new Database(file, { readonly: true, fileMustExist: true });
     let version: unknown;
-    try { version = source.pragma('user_version', { simple: true });if (version !== 1 && version !== 2 && version !== 3) throw new Error('Unsupported backup schema');await source.backup(join(target, 'manager.sqlite')); }
+    try { version = source.pragma('user_version', { simple: true });if (version !== 1 && version !== 2 && version !== 3 && version !== 4) throw new Error('Unsupported backup schema');await source.backup(join(target, 'manager.sqlite')); }
     finally { source.close(); }
-    await chmod(join(target, 'manager.sqlite'), 0o600);await mkdir(join(target, 'releases'), { mode: 0o700 });
+    await chmod(join(target, 'manager.sqlite'), 0o600);
+    // auth.key is immutable after provisioning and required to recover encrypted identities.
+    try { await copyFile(join(directory, 'auth.key'), join(target, 'auth.key'));await chmod(join(target, 'auth.key'), 0o600); }catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }await mkdir(join(target, 'releases'), { mode: 0o700 });
     const snapshot = new Database(join(target, 'manager.sqlite'), { readonly: true, fileMustExist: true });
     try {
+      if (snapshot.prepare("SELECT 1 FROM admins WHERE json_extract(data,'$.kind')='TOTP' OR id='totp-pending' LIMIT 1").get()) await access(join(target,'auth.key'));
       if (snapshot.pragma('integrity_check', { simple: true }) !== 'ok') throw new Error('Backup integrity check failed');
       for (const row of snapshot.prepare('SELECT data FROM releases').iterate()) {
         const release = releaseSchema.parse(JSON.parse(z.object({ data: z.string() }).parse(row).data) as unknown);

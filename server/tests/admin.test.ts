@@ -1,3 +1,4 @@
+import { newTotpSecret,totp } from '../api/src/totp.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -9,13 +10,13 @@ import { provisionAdmin } from '../api/src/auth.ts';
 
 test('administrator session has secure cookie, CSRF checks and expires after idle timeout', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'ams-admin-'));
-  const password = randomBytes(24).toString('base64url');
-  provisionAdmin(directory, 'operator', password);
+  const secret = newTotpSecret();
+  provisionAdmin(directory, 'operator', secret);
   let now = 1_000_000;
   const origin = 'https://ams.opt.work';
   const app = await createApp({ directory, enrollmentKey: randomBytes(32).toString('hex'), origin, now: () => now });
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/v1/admin/login', headers: { origin }, payload: { username: 'operator', password } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/admin/login', headers: { origin }, payload: { username: 'operator', code: totp(secret, now) } });
     assert.equal(response.statusCode, 200);
     const cookie = response.headers['set-cookie'];
     assert.equal(typeof cookie, 'string');

@@ -1,3 +1,4 @@
+import { newTotpSecret,totp } from '../api/src/totp.ts';
 import type { TestContext } from 'node:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,9 +10,9 @@ import { provisionAdmin } from '../api/src/auth.ts';
 export async function fixture(t: TestContext, options: { now?: () => number; monotonic?: () => number; buildTools?: string; webRoot?: string } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'ams-fixture-'));
   const enrollmentKey = randomBytes(32).toString('hex');
-  const password = randomBytes(24).toString('base64url');
+  const secret = newTotpSecret();
   const origin = 'https://ams.opt.work';
-  provisionAdmin(directory, 'operator', password);
+  provisionAdmin(directory, 'operator', secret);
   const app = await createApp({ directory, enrollmentKey, origin, ...options });
   t.after(async () => { await app.close(); await rm(directory, { recursive: true, force: true }); });
   async function registration(installId: string = randomUUID()) {
@@ -27,10 +28,12 @@ export async function fixture(t: TestContext, options: { now?: () => number; mon
     if (response.statusCode !== 200) throw new Error('fixture registration failed');
     return response.json().data as { deviceId: string; token: string };
   }
+  let cachedAdmin: { origin: string; cookie: string; 'x-csrf-token': string } | undefined;
   async function admin() {
-    const response = await app.inject({ method: 'POST', url: '/api/v1/admin/login', headers: { origin }, payload: { username: 'operator', password } });
+    if(cachedAdmin)return cachedAdmin;
+    const response = await app.inject({ method: 'POST', url: '/api/v1/admin/login', headers: { origin }, payload: { username: 'operator', code: totp(secret, (options.now?.() ?? Date.now())) } });
     if (response.statusCode !== 200) throw new Error('Administrator authentication rejected');
-    return { origin, cookie: String(response.headers['set-cookie']).split(';')[0], 'x-csrf-token': response.json().data.csrf as string };
+    return cachedAdmin = { origin, cookie: String(response.headers['set-cookie']).split(';')[0], 'x-csrf-token': response.json().data.csrf as string };
   }
   return { app, directory, enrollmentKey, registration, register, admin };
 }

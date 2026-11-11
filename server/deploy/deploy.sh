@@ -24,18 +24,17 @@ compose config --quiet
 compose build ams
 state=$(compose run --rm --no-deps -T ams node dist/api/src/deployment-cli.js)
 case "$state" in
-  initialized) printf '保留已有管理员账号。\n' ;;
+  initialized) printf '保留已有TOTP管理员账号。\n' ;;
+  pending) printf '待确认TOTP绑定，保留已有绑定资料；请运行admin-cli.js confirm。\n' ;;
+  legacy) fail '旧密码账号需先用服务器命令完成TOTP绑定迁移；不会自动替换身份。' ;;
   uninitialized)
     AMS_ADMIN_USER=${AMS_ADMIN_USER:-}
-    AMS_ADMIN_PASSWORD=${AMS_ADMIN_PASSWORD:-}
-    if [[ -t 0 ]]; then
-      if [[ -z "$AMS_ADMIN_USER" ]]; then read -r -p '管理员账号: ' AMS_ADMIN_USER; fi
-      if [[ -z "$AMS_ADMIN_PASSWORD" ]]; then read -r -s -p '管理员密码（至少12字符）: ' AMS_ADMIN_PASSWORD; printf '\n'; fi
-    fi
-    [[ -n "$AMS_ADMIN_USER" && ${#AMS_ADMIN_PASSWORD} -ge 12 ]] || fail '首次部署需提供管理员账号和至少12字符密码（AMS_ADMIN_USER/AMS_ADMIN_PASSWORD）。'
-    export AMS_ADMIN_USER AMS_ADMIN_PASSWORD
-    compose run --rm --no-deps -T -e AMS_ADMIN_USER -e AMS_ADMIN_PASSWORD ams node dist/api/src/admin-cli.js
-    unset AMS_ADMIN_USER AMS_ADMIN_PASSWORD
+    if [[ -t 0 && -z "$AMS_ADMIN_USER" ]]; then read -r -p '管理员账号: ' AMS_ADMIN_USER; fi
+    [[ -n "$AMS_ADMIN_USER" ]] || fail '首次部署需提供管理员账号（AMS_ADMIN_USER），不使用固定密码。'
+    export AMS_ADMIN_USER
+    compose run --rm --no-deps -T -e AMS_ADMIN_USER ams node dist/api/src/admin-cli.js init
+    unset AMS_ADMIN_USER
+    printf '请读取数据卷中的私有totp-enrollment.json添加身份验证器，然后运行admin-cli.js confirm启用登录。\n'
     ;;
   *) fail '部署状态异常，停止；不会清除数据库。' ;;
 esac

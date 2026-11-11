@@ -1,10 +1,16 @@
+import { totp } from '../../api/src/totp.ts';
+import { writeFile,rename } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { readFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-async function credentials() { return JSON.parse(await readFile(join(import.meta.dirname, '../../node_modules/.cache/ams-browser.json'), 'utf8')) as { username: string; password: string; apk?: string }; }
+async function credentials() {
+ const value=JSON.parse(await readFile(join(import.meta.dirname, '../../node_modules/.cache/ams-browser.json'), 'utf8')) as { username:string;secret:string;apk?:string;clockFile:string };
+ const clock=JSON.parse(await readFile(value.clockFile,'utf8')) as {at:number;real:number};const at=clock.at+60000;await writeFile(value.clockFile+'.next',JSON.stringify({at,real:Date.now()}));await rename(value.clockFile+'.next',value.clockFile);
+ return {...value,code:totp(value.secret,at)};
+}
 test('administrator can edit configuration, inspect missing usage, publish and queue, while offline reboot stays disabled', async ({ page }) => {
   const fixture = await credentials(); await page.goto('/');
-  await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();
+  await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();
   await page.getByRole('button', { name: /^测试手机/ }).click();
   await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeDisabled();
   await expect(page.getByLabel('星期一开始')).toHaveValue('08:00');
@@ -28,14 +34,14 @@ test('administrator can edit configuration, inspect missing usage, publish and q
 });
 test('narrow screen keeps login and device navigation within the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });const fixture = await credentials();await page.goto('/');
-  await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();
+  await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();
   await expect(page.getByLabel('管控总开关')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   await mkdir(join(import.meta.dirname, '../../../designs/validation/remote-console'), { recursive: true });
   await page.screenshot({ path: join(import.meta.dirname, '../../../designs/validation/remote-console/mobile.png'), fullPage: true });
 });
 test('retry after a lost save response reuses its mutation identity', async ({ page }) => {
-  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();
   const ids: string[] = [];
   await page.route('**/api/v1/admin/devices/*/config', async route => {
     if (route.request().method() !== 'PUT') { await route.continue();return; }
@@ -47,7 +53,7 @@ test('retry after a lost save response reuses its mutation identity', async ({ p
   await page.screenshot({ path: join(import.meta.dirname, '../../../designs/validation/remote-console/desktop.png'), fullPage: true });
 });
 test('a configuration read started before a successful save cannot restore old form values', async ({ page }) => {
-  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeDisabled();
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeDisabled();
   let release: () => void = () => {};let captured: () => void = () => {};let intercepted = false;
   const blocked = new Promise<void>(resolve => { release = resolve; });const observed = new Promise<void>(resolve => { captured = resolve; });
   await page.route('**/api/v1/admin/devices/*/config', async route => {
@@ -60,7 +66,7 @@ test('a configuration read started before a successful save cannot restore old f
 });
 
 test('current policy failures and alarm warnings remain visible without claiming execution success', async ({ page }) => {
-  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();
   let failed = false;
   await page.route(/\/api\/v1\/admin\/devices\/[^/?]+$/, async route => {
     const response = await route.fetch();const body = await response.json();
@@ -72,7 +78,7 @@ test('current policy failures and alarm warnings remain visible without claiming
 });
 
 test('application checkboxes alone add and remove blacklist entries with no duplicate selected list', async ({ page }) => {
-  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();
   const game = page.getByRole('checkbox', { name: /测试游戏/ });await game.check();
   await expect(page.getByText(/^已选 \d+ 个应用$/)).toHaveCount(0);
   await page.getByRole('button', { name: '保存配置', exact: true }).click();await expect(page.getByText('配置已保存，请查看设备接收与执行结果。')).toBeVisible();
@@ -91,7 +97,7 @@ test('usage missing fields explain the missing event and distinguish active sess
     { id: 'missing-both', startedAtMs: null, endedAtMs: null, durationMs: null, quality: 'MISSING_END', source: 'LIVE', clockAdjusted: false },
     { id: 'active-missing-start', startedAtMs: null, endedAtMs: null, durationMs: null, quality: 'IN_PROGRESS', source: 'LIVE', clockAdjusted: false },
   ], gaps: [], completeDurationMs: 0, incompleteCount: 3, activeCount: 2, total: 6 } } }));
-  await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await page.getByRole('button', { name: '使用记录', exact: true }).click();
+  await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await page.getByRole('button', { name: '使用记录', exact: true }).click();
   const table = page.getByRole('table', { name: '当天使用会话' });const rows = table.locator('tbody tr');
   await expect(rows.nth(0).getByRole('cell').nth(0)).toHaveText('未记录开始时间');await expect(rows.nth(0).getByRole('cell').nth(1)).toContainText('20:43:02');await expect(rows.nth(0).getByRole('cell').nth(2)).toHaveText('无法计算（缺少开始时间）');
   await expect(rows.nth(1).getByRole('cell').nth(1)).toHaveText('未记录结束时间');await expect(rows.nth(1).getByRole('cell').nth(2)).toHaveText('无法计算（缺少结束时间）');
@@ -100,7 +106,7 @@ test('usage missing fields explain the missing event and distinguish active sess
 });
 
 test('clear usage targets the selected Shanghai date, reports failures, and refreshes the cleared view', async ({ page }) => {
-  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('管理员密码').fill(fixture.password);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await page.getByRole('button', { name: '使用记录', exact: true }).click();
+  const fixture = await credentials();await page.goto('/');await page.getByLabel('管理员账号').fill(fixture.username);await page.getByLabel('动态验证码').fill(fixture.code);await page.getByRole('button', { name: '登录', exact: true }).click();await page.getByRole('button', { name: /^测试手机/ }).click();await page.getByRole('button', { name: '使用记录', exact: true }).click();
   const rows = page.getByRole('table', { name: '当天使用会话' }).locator('tbody tr');await expect(rows).toHaveCount(1);
   const date = page.getByLabel('日期（上海时区）');const selected = await date.inputValue();
   const clear = page.getByRole('button', { name: '清空记录', exact: true });await expect(clear).toBeEnabled();

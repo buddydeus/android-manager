@@ -23,9 +23,9 @@ async function refresh() {
   } catch (e) { if (epoch === generation) error.value = errorText(e); }
   finally { refreshing = false; }
 }
-async function login(username: string, password: string) {
+async function login(username: string, code: string) {
   busy.value = true;error.value = '';
-  try { const session = await api.data('/login', z.object({ csrf: z.string() }), { method: 'POST', body: { username, password } });api.csrf = session.csrf;logged.value = true;await refresh(); }
+  try { const session = await api.data('/login', z.object({ csrf: z.string() }), { method: 'POST', body: { username, code } });api.csrf = session.csrf;logged.value = true;await refresh(); }
   catch (e) { error.value = errorText(e); }finally { busy.value = false; }
 }
 async function choose(device: DeviceView) {

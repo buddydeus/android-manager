@@ -55,17 +55,20 @@ docker compose build
 
 正式APK构建环境必须设置与 `.env` 一致的 `AMS_ENROLLMENT_KEY`。App不允许更换服务器地址或本机解绑。APK中共享接入凭据可被提取，不能充当硬件认证；正常连接使用每台设备的独立token，服务端只存摘要。
 
-创建唯一管理员（密码至少12字符，不等于手机管理密码）：
+网页登录仅使用用户名和TOTP动态验证码，无固定密码回退。现有密码账号必须通过服务器命令迁移，不自动覆盖。新部署绑定：
 
 ```sh
-read -r -p '管理员账号: ' AMS_ADMIN_USER
-read -r -s -p '管理员密码: ' AMS_ADMIN_PASSWORD
-export AMS_ADMIN_USER AMS_ADMIN_PASSWORD
-docker compose run --rm -e AMS_ADMIN_USER -e AMS_ADMIN_PASSWORD ams node dist/api/src/admin-cli.js
-unset AMS_ADMIN_USER AMS_ADMIN_PASSWORD
-docker compose up -d
-docker compose ps
+export AMS_ADMIN_USER=operator
+docker compose run --rm -e AMS_ADMIN_USER ams node dist/api/src/admin-cli.js init
+# 在服务器本地读取/data/totp-enrollment.json，手动将secret添加到身份验证器；不要发送到聊天。
+docker compose run --rm -it ams node dist/api/src/admin-cli.js confirm
+# 等待下一个动态验证码后登录
+unset AMS_ADMIN_USER
 ```
+
+迁移旧账号时，先用新镜像执行`prepare`生成私有绑定资料（不改数据库和旧登录），添加到身份验证器后执行`activate`并输入当前动态码，成功再启动新服务。命令`reset`/`confirm`只用于具备服务器管理权限时重置丢失的身份验证器；`cancel`撤销待确认绑定。新账号待确认前不开放登录；TOTP已启用账号不会被init覆盖。`confirm`/`activate`停用固定密码并撤销全部旧会话。当前已使用的验证码不能再次登录，请等下一个30秒周期。
+
+TOTP采用6位、30秒SHA1、相邻一个周期容差；每时间步仅成功一次，并发验证与消费在SQLite事务内。账号5次/IP20次失败后受5分钟窗口限制，计数跨进程重启保留。密钥AES-256-GCM加密存入数据库，独立的`/data/auth.key`权限600，丢失时禁止自动重建；私有完整备份包含该文件，泄露完整备份等同泄露TOTP密钥，必须受限保管。准备资料启用后删除；不要保留它的多份明文副本。
 
 重复初始化管理员会拒绝，不覆盖现有账号。Caddy自动提供HTTPS与WSS反向代理；AMS容器不对公网直接开放8080，应用以UID1000运行。私有网络为 `172.30.90.0/24`，只信任Caddy的 `172.30.90.3/32` 转发地址；若与现有网络冲突，须同时调整compose网络、Caddy地址与AMS_TRUST_PROXY。生产不要使用浏览器测试服务。
 
@@ -96,7 +99,7 @@ docker compose exec -e AMS_BACKUP_DIR=/data/backups ams node dist/api/src/backup
 docker compose cp ams:/data/backups ./backups
 ```
 
-转存到独立受保护介质，并单独安全备份部署 `.env` 与签名材料。备份含账号校验值和设备凭据摘要，勿公开。恢复时停止服务，将完整快照（数据库、releases目录、backup.json）放入**新建本机卷**并确保UID1000可读写，保留原卷，完成健康与登录检查后切换；部署秘密须配套恢复。设备重连会重新提交本机完整配置候选；新设备身份会重新上传保留期内统计及目录。旧重启命令没有内存执行许可，不会重放。恢复后缺失任务，或重启回执缺少服务端许可证据时，回执接口分项返回`orphaned`（id/version），其余正常项返回`accepted`；手机保留原始操作记录并标记不可核验，匹配版本后停止补传，继续其他同步。不要删除未知版本的数据库来“修复”启动。
+转存到独立受保护介质，并单独安全备份部署 `.env` 与签名材料。备份含TOTP加密身份、auth.key和设备凭据摘要，勿公开。恢复时停止服务，将完整快照（数据库、releases目录、backup.json）放入**新建本机卷**并确保UID1000可读写，保留原卷，完成健康与登录检查后切换；部署秘密须配套恢复。设备重连会重新提交本机完整配置候选；新设备身份会重新上传保留期内统计及目录。旧重启命令没有内存执行许可，不会重放。恢复后缺失任务，或重启回执缺少服务端许可证据时，回执接口分项返回`orphaned`（id/version），其余正常项返回`accepted`；手机保留原始操作记录并标记不可核验，匹配版本后停止补传，继续其他同步。不要删除未知版本的数据库来“修复”启动。
 
 隔离Android联调入口为`tests/android-server.ts`，只监听127.0.0.1:8443，须显式提供权限600的`AMS_ANDROID_FIXTURE` JSON（随机fixtureId/enrollmentKey/adminPassword）及同目录tls/server.key、tls/server.pem；数据仅写入该目录的server-data。该入口不进入运行镜像。Android测试CA仅debug可用，须通过显式UUID和指纹夹具安装；不得将测试地址、CA、凭据或数据库用于生产。实际验收范围见[设备验证](../docs/device-validation.md)。
 

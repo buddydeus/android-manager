@@ -45,7 +45,7 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   app.get('/health/live', () => ({ status: 'ok' }));
   app.get('/health/ready', () => { store.db.prepare('SELECT 1').get(); return { status: 'ready' }; });
   deviceRoutes(app, ctx);
-  authRoutes(app, ctx);
+  try { authRoutes(app, ctx, options.directory); }catch (error) { await app.close();throw error; }
   adminRoutes(app, ctx);
   usageRoutes(app, ctx);
   catalogRoutes(app, ctx);
